@@ -23,6 +23,10 @@ func main() {
 	// Use the model name from the server, or fallback to a default.
 	modelName := "qwen3.5:2b"
 
+	// Load our tools
+	tools := larkspur.LoadAllTools()
+	fmt.Printf("Tools: %v\n", tools)
+
 	for {
 		fmt.Printf("User: ")
 
@@ -37,7 +41,7 @@ func main() {
 		fmt.Printf("  Prompt: `%v`", prompt)
 
 		if prompt != "" {
-			response := larkspur.Chat(provider, modelName, prompt)
+			response := larkspur.Chat(provider, modelName, prompt, tools)
 
 			fmt.Printf("Agent 🥳: %s\n", response)
 			fmt.Println()

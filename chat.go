@@ -12,8 +12,9 @@ import (
 
 // Chat executes a ReAct loop using the given provider, model, and prompt.
 // The final response is returned once the loop finishes.
-func Chat(provider *ollama.Provider, model, prompt string) string {
+func Chat(provider *ollama.Provider, model, prompt string, tools []anyllm.Tool) string {
 	final := ""
+
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: developerPrompt},
 		{Role: anyllm.RoleUser, Content: prompt},

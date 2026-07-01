@@ -1,0 +1,67 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "file_write_full",
+        "description": "Write the contents to a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the file to write."
+            },
+            "content": {
+              "type": "string",
+              "description": "The content to write to the file."
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_read_full",
+        "description": "Read the full contents of a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the file to read."
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_read_lines",
+        "description": "Read the specified lines of a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the file to write."
+            },
+            "start": {
+              "type": "integer",
+              "description": "The line at which to start reading."
+            },
+            "stop": {
+              "type": "integer",
+              "description": "The line at which to stop reading."
+            }
+          },
+          "required": ["name", "start", "stop"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    }
+  ]
+}

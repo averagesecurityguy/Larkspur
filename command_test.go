@@ -12,7 +12,8 @@ type safeTest struct {
 }
 
 type systemCommandTest struct {
-	command  string
+	args     string
+	err      string
 	response string
 }
 
@@ -94,13 +95,15 @@ func testSafeSemicolon(t *testing.T) {
 
 func testSystemCommand(t *testing.T) {
 	cmdTests := []systemCommandTest{
-
-		{command: "cat junk >> junk.txt", response: "No such file or directory"},
-		{command: "python3 --version", response: "Success"},
+		{args: `{"unexpected": "not a valid key"}`, response: "system_command: error: missing command"},
+		{args: `{command": "cat junk"}`, response: "system_command: error: invalid character"},
+		{args: `{"command": "git"}`, response: "system_command: error: command not allowed"},
+		{args: `{"command": "cat junk"}`, response: "No such file or directory"},
+		{args: `{"command": "python3 --version"}`, response: "system_command: error: command not allowed"},
 	}
 
 	for _, ct := range cmdTests {
-		resp := SystemCommand(ct.command)
+		resp := systemCommand(ct.args)
 
 		if !strings.Contains(resp, ct.response) {
 			t.Fatalf("Expected response `%s`, received `%s`", ct.response, resp)

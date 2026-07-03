@@ -1,10 +1,10 @@
 package larkspur
 
 import (
-	"fmt"
-	"path/filepath"
-	"os"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
 )
@@ -14,24 +14,19 @@ type toolList struct {
 }
 
 // executeTool calls the appropriate function based on the tool name.
-func executeTool(name, arguments string) (string, error) {
-	var result string
-	var err error
-
+func executeTool(name, arguments string) string {
 	switch name {
 	case "system_command":
-		result, err = systemCommand(arguments)
+		return systemCommand(arguments)
 	case "file_write_full":
-		result, err = fileWriteFull(arguments)
+		return fileWriteFull(arguments)
+	case "file_read_full":
+		return fileReadFull(arguments)
+	case "file_read_lines":
+		return fileReadLines(arguments)
 	default:
-		return "", fmt.Errorf("Error: unknown tool: %s", name)
+		return fmt.Sprintf("error: unknown tool: %s", name)
 	}
-
-	if err != nil {
-		return "", fmt.Errorf("Error: %v", err)
-	}
-
-	return result, nil
 }
 
 // loadSystemTools loads the list of system tools defined in the system.json

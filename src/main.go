@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// Use the model name from the server, or fallback to a default.
-	modelName := "qwen3.5:2b"
+	modelName := "qwen3.5:0.8b"
 
 	// Load our tools
 	tools := larkspur.LoadAllTools()

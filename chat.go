@@ -63,11 +63,7 @@ func Chat(provider *ollama.Provider, model, prompt string, tools []anyllm.Tool) 
 				fmt.Printf("  Arguments: %s\n", tc.Function.Arguments)
 
 				// Execute the real tool.
-				result, execErr := executeTool(tc.Function.Name, tc.Function.Arguments)
-				if execErr != nil {
-					log.Fatal(execErr)
-				}
-
+				result := executeTool(tc.Function.Name, tc.Function.Arguments)
 				fmt.Printf("  Result: %s\n\n", result)
 
 				// Add the tool result to the conversation.

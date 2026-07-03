@@ -71,14 +71,18 @@ func safeSemicolon(shellStr string) bool {
 // stderr. Before executing a command, a few basic checks are run to ensure
 // the commands being run are allowed. The checks are not comprehensive and
 // will not stop a persistent attacker.
-func systemCommand(arguments string) (string, error) {
+func systemCommand(arguments string) string {
 	// Convert the JSON argument string to an args struct.
 	var args struct {
 		Command string `json:"command"`
 	}
 
 	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
-		return "", fmt.Errorf("system_command: error: %v", err)
+		return fmt.Sprintf("system_command: error: %v", err)
+	}
+
+	if args.Command == "" {
+		return fmt.Sprintf("system_command: error: missing command")
 	}
 
 	// Conduct a simple sanity check on our command
@@ -89,12 +93,12 @@ func systemCommand(arguments string) (string, error) {
 	}
 
 	if !safeEval(shellStr) || !safePipe(shellStr) {
-		return "", fmt.Errorf("system_command: error: command not allowed")
+		return fmt.Sprintf("system_command: error: command not allowed")
 	}
 
 	ctx := context.Background()
 	cmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("%s", shellStr))
 	out, _ := cmd.CombinedOutput()
 
-	return fmt.Sprintf("%s", out), nil
+	return fmt.Sprintf("%s", out)
 }

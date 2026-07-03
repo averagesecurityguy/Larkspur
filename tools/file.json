@@ -17,8 +17,11 @@
               "description": "The content to write to the file."
             }
           }
-        }
-      }
+        },
+        "required": ["name", "content"],
+        "additionalProperties": false
+      },
+        "strict": true
     },
     {
       "type": "function",
@@ -33,8 +36,11 @@
               "description": "The name of the file to read."
             }
           }
-        }
-      }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "strict": true
     },
     {
       "type": "function",

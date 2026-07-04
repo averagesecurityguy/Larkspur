@@ -78,17 +78,17 @@ func main() {
 		}
 
 		if prompt != "" {
-			route := larkspur.Route(provider.(*ollama.Provider), prompt)
+			plan := larkspur.Planner(provider.(*ollama.Provider), prompt)
 
-			fmt.Printf("Route: %s\n", route)
+			fmt.Printf("Plan: %s\n", plan)
 
-			if route != "" {
-				response := larkspur.Chat(provider.(*ollama.Provider), route)
+			// if route != "" {
+			// 	response := larkspur.Chat(provider.(*ollama.Provider), route)
 
-				fmt.Printf("Agent 🥳: %s\n", response)
-				fmt.Println()
-				fmt.Println()
-			}
+			// 	fmt.Printf("Agent 🥳: %s\n", response)
+			// 	fmt.Println()
+			// 	fmt.Println()
+			// }
 		}
 	}
 }

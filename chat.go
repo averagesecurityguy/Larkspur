@@ -15,74 +15,37 @@ type chatArguments struct {
 	Prompt string `json:"prompt"`
 }
 
-// Route analyzes the user's prompt to determine the best agent and prompt to
-// accomplish the goal.
-func Route(provider *ollama.Provider, userPrompt string) string {
-	final := ""
-
-	messages := []anyllm.Message{
-		{Role: anyllm.RoleSystem, Content: routerPrompt},
-		{Role: anyllm.RoleUser, Content: fmt.Sprintf("User's request: %s\n", userPrompt)},
-	}
-
-	for {
-		ctx := context.Background()
-
-		response, err := provider.Completion(ctx, anyllm.CompletionParams{
-			Model:      routerModel,
-			Messages:   messages,
-			ResponseFormat: routerResponse,
-			ReasoningEffort: anyllm.ReasoningEffortHigh,
-		})
-		if err != nil {
-			log.Error().Err(err).Msg("invalid response")
-			break
-		}
-
-		message := response.Choices[0].Message
-		finish := response.Choices[0].FinishReason
-		final = fmt.Sprintf("%s", message.Content)
-
-		if message.Reasoning != nil {
-			fmt.Printf("Agent 🤔: %s\n", message.Reasoning.Content)
-			messages = append(messages, anyllm.Message{
-				Role:    anyllm.RoleAssistant,
-				Content: message.Reasoning.Content,
-			})
-		}
-
-		if finish == anyllm.FinishReasonStop {
-			break
-		}
-	}
-
-	return final
-}
-
-
 // Chat executes a ReAct loop using the given provider, model, and prompt.
 // The final response is returned once the loop finishes.
 func Chat(provider *ollama.Provider, route string) string {
 	var final string
 	var args chatArguments
 
+	// Get our arguments from the route string. Includes the agent name and
+	// the updated prompt.
 	err := json.Unmarshal([]byte(route), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("invalid arguments")
 		return ""
 	}
 
+	// Get the agent information from the agent name. This includes the model,
+	// the tools, and the system prompt.
 	agent := getAgent(args.Agent)
 
+	// Set the initial messages for this chat. Includes the system prompt and
+	// and the user's prompt.
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: agent.system},
 		{Role: anyllm.RoleUser, Content: args.Prompt},
 	}
 
+	// Run the ReAct loop appending each LLM response and the results of each
+	// tool call to the message list.
 	for {
 		ctx := context.Background()
 
-		response, err := provider.Completion(ctx, anyllm.CompletionParams{
+		resp, err := provider.Completion(ctx, anyllm.CompletionParams{
 			Model:      agent.model,
 			Messages:   messages,
 			Tools:      agent.tools,
@@ -93,27 +56,30 @@ func Chat(provider *ollama.Provider, route string) string {
 			break
 		}
 
-		message := response.Choices[0].Message
-		finish := response.Choices[0].FinishReason
-		final = fmt.Sprintf("%s", message.Content)
+		// Add the response message to the message list
+		messages = append(messages, resp.Choices[0].Message)
+		
+		// Capture the message content in case it is our final message
+		final = fmt.Sprintf("%s", resp.Choices[0].Message.Content)
 
-		if message.Reasoning != nil {
-			fmt.Printf("%s 🤔: %s\n", args.Agent, message.Reasoning.Content)
-			messages = append(messages, anyllm.Message{
-				Role:    anyllm.RoleAssistant,
-				Content: message.Reasoning.Content,
-			})
-		}
+		// // If the model provided reasoning,  to the message list.
+		// if message.Reasoning != nil {
+		// 	fmt.Printf("%s 🤔: %s\n", args.Agent, message.Reasoning.Content)
+		// 	messages = append(messages, anyllm.Message{
+		// 		Role:    anyllm.RoleAssistant,
+		// 		Content: message.Reasoning.Content,
+		// 	})
+		// }
 
-		// Check if the model wants to call a tool.
-		if finish == anyllm.FinishReasonToolCalls {
-			// Add the assistant's message (with tool calls) to the conversation.
-			messages = append(messages, message)
-
-			// Process each tool call.
-			for _, tc := range response.Choices[0].Message.ToolCalls {
-				// Execute the real tool.
+		// If the model wants to call tools, execute each one and append the
+		// results to the message list.
+		if resp.Choices[0].FinishReason == anyllm.FinishReasonToolCalls {
+			for _, tc := range resp.Choices[0].Message.ToolCalls {
 				result := executeTool(tc.Function.Name, tc.Function.Arguments)
+				log.Debug().
+					Str("function", tc.Function.Name).
+					Str("arguments", tc.Function.Arguments).
+					Msg(result)
 
 				// Add the tool result to the conversation.
 				messages = append(messages, anyllm.Message{
@@ -124,7 +90,8 @@ func Chat(provider *ollama.Provider, route string) string {
 			}
 		}
 
-		if finish == anyllm.FinishReasonStop {
+		// If the model is done then break the loop and return the final response.
+		if resp.Choices[0].FinishReason == anyllm.FinishReasonStop {
 			break
 		}
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 type fileReadFullArgs struct {
-	Name string `json:"name"`
+	Name string `json:"file_name"`
 }
 
 type fileFindGlobArgs struct {
@@ -28,8 +28,8 @@ type fileWriteFullArgs struct {
 
 type fileReadLinesArgs struct {
 	fileReadFullArgs
-	Start int `json:"start"`
-	Stop  int `json:"stop"`
+	Start int `json:"start_line"`
+	Stop  int `json:"stop_line"`
 }
 
 // fileWriteFull writes the given content to the given filename.
@@ -227,6 +227,7 @@ func fileFindGlob(arguments string) string {
 	}
 
 	if matches == nil {
+		log.Info().Msg("no matching files")
 		return fmt.Sprintf("No matching files")
 	}
 

@@ -4,11 +4,11 @@
       "type": "function",
       "function": {
         "name": "file_write_full",
-        "description": "file_write_full is used to write the given content to a file with the given name. The existing content of the file will be replaced with the given content.",
+        "description": "file_write_full is used to write the given content to the given file. The existing content of the file will be replaced with the given content.",
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "file_name": {
               "type": "string",
               "description": "The name of the file where the content will be written."
             },
@@ -18,7 +18,7 @@
             }
           }
         },
-        "required": ["name", "content"],
+        "required": ["file_name", "content"],
         "additionalProperties": false
       },
         "strict": true
@@ -31,13 +31,13 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "file_name": {
               "type": "string",
               "description": "The name of the file to read."
             }
           }
         },
-        "required": ["name"],
+        "required": ["file_name"],
         "additionalProperties": false
       },
       "strict": true
@@ -50,20 +50,20 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "file_name": {
               "type": "string",
               "description": "The name of the file to write."
             },
-            "start": {
+            "start_line": {
               "type": "integer",
               "description": "The line at which to start reading."
             },
-            "stop": {
+            "stop_line": {
               "type": "integer",
               "description": "The line at which to stop reading."
             }
           },
-          "required": ["name", "start", "stop"],
+          "required": ["file_name", "start", "stop"],
           "additionalProperties": false
         },
         "strict": true
@@ -77,13 +77,13 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "file_name": {
               "type": "string",
               "description": "The name of the file to read."
             }
           }
         },
-        "required": ["name"],
+        "required": ["file_name"],
         "additionalProperties": false
       },
       "strict": true
@@ -96,13 +96,13 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "file_name": {
               "type": "string",
               "description": "The name of the file to read."
             }
           }
         },
-        "required": ["name"],
+        "required": ["file_name"],
         "additionalProperties": false
       },
       "strict": true
@@ -121,7 +121,7 @@
             }
           }
         },
-        "required": ["name"],
+        "required": ["glob"],
         "additionalProperties": false
       },
       "strict": true

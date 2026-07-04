@@ -4,6 +4,9 @@
 # Mac
 .DS_Store
 
+# Executable
+larkspur
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

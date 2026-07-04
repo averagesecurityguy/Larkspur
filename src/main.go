@@ -2,30 +2,65 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
-	"time"
 
 	"larkspur"
 
-	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers/ollama"
 )
 
-func main() {
-	provider, err := ollama.New(anyllm.WithTimeout(300 * time.Second))
-	if err != nil {
-		log.Fatal(err)
+var (
+	versionId           = "v0.1.0"
+	exitCodeNoError     = 0
+	exitCodeNoLogFile   = 1
+	exitCodeBadProvider = 2
+	exitCodeNoProvider  = 3
+	quitStrings = []string{"/quit", "/q", "/exit"}
+)
+
+// usage displays the command line usage
+func usage() {
+	w := flag.CommandLine.Output()
+
+	fmt.Fprintf(w, "Usage: larkspur [options]\n")
+	flag.PrintDefaults()
+}
+
+func shouldExit(prompt string) bool {
+	for _, quit := range quitStrings {
+		if prompt == quit {
+			return true
+		}
 	}
 
-	// Use the model name from the server, or fallback to a default.
-	modelName := "qwen3.5:0.8b"
+	return false
+}
 
-	// Load our tools
-	tools := larkspur.LoadAllTools()
-	fmt.Printf("Tools: %v\n", tools)
+func main() {
+	// Define our command line flags
+	var level string
+	var version bool
+
+	flag.StringVar(&level, "level", "ERROR", "Set the logging level [ERROR, WARN, INFO, DEGUG]")
+	flag.BoolVar(&version, "v", false, "Display the product version.")
+
+	// Define our usage statement
+	flag.Usage = usage
+
+	// Parse our flags
+	flag.Parse()
+
+	// Show version if requested
+	if version {
+		fmt.Printf("Version: %s\n", versionId)
+		os.Exit(exitCodeNoError)
+	}
+
+	configureLogger(level)
+	provider := getProvider()
 
 	for {
 		fmt.Printf("User: ")
@@ -38,14 +73,22 @@ func main() {
 
 		prompt = strings.TrimSuffix(prompt, "\n")
 
-		fmt.Printf("  Prompt: `%v`", prompt)
+		if shouldExit(prompt) {
+			break
+		}
 
 		if prompt != "" {
-			response := larkspur.Chat(provider, modelName, prompt, tools)
+			route := larkspur.Route(provider.(*ollama.Provider), prompt)
 
-			fmt.Printf("Agent 🥳: %s\n", response)
-			fmt.Println()
-			fmt.Println()
+			fmt.Printf("Route: %s\n", route)
+
+			if route != "" {
+				response := larkspur.Chat(provider.(*ollama.Provider), route)
+
+				fmt.Printf("Agent 🥳: %s\n", response)
+				fmt.Println()
+				fmt.Println()
+			}
 		}
 	}
 }

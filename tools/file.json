@@ -4,17 +4,17 @@
       "type": "function",
       "function": {
         "name": "file_write_full",
-        "description": "Write the contents to a file",
+        "description": "file_write_full is used to write the given content to a file with the given name. The existing content of the file will be replaced with the given content.",
         "parameters": {
           "type": "object",
           "properties": {
             "name": {
               "type": "string",
-              "description": "The name of the file to write."
+              "description": "The name of the file where the content will be written."
             },
             "content": {
               "type": "string",
-              "description": "The content to write to the file."
+              "description": "The content that will be written to the file."
             }
           }
         },
@@ -27,7 +27,7 @@
       "type": "function",
       "function": {
         "name": "file_read_full",
-        "description": "Read the full contents of a file.",
+        "description": "file_read_full is used to read the full contents of the file with the given name. This function should not be used for large files, which should be read in smaller portions using the file_read_lines function. To determine the size of the file use the file_size_bytes function.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -46,7 +46,7 @@
       "type": "function",
       "function": {
         "name": "file_read_lines",
-        "description": "Read the specified lines of a file.",
+        "description": "file_read_lines is used to read specific lines from a file and is useful for reading portions of a large file. Use the file_size_lines function to determine the number of lines in a file.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -68,6 +68,63 @@
         },
         "strict": true
       }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_size_bytes",
+        "description": "file_size_bytes is used to determine the size of a file in bytes.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the file to read."
+            }
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_size_lines",
+        "description": "file_size_lines is used to determine the number of lines in a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the file to read."
+            }
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_find_glob",
+        "description": "file_find_glob is used to find files and directories using glob patterns.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "glob": {
+              "type": "string",
+              "description": "The glob pattern to use to find a file or directory."
+            }
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "strict": true
     }
   ]
 }

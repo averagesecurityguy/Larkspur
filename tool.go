@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 )
 
@@ -15,6 +16,11 @@ type toolList struct {
 
 // executeTool calls the appropriate function based on the tool name.
 func executeTool(name, arguments string) string {
+	log.Info().
+		Str("name", name).
+		Str("arguments", arguments).
+		Msg("executing tool")
+	
 	switch name {
 	case "system_command":
 		return systemCommand(arguments)
@@ -24,6 +30,12 @@ func executeTool(name, arguments string) string {
 		return fileReadFull(arguments)
 	case "file_read_lines":
 		return fileReadLines(arguments)
+	case "file_size_bytes":
+		return fileSizeBytes(arguments)
+	case "file_size_lines":
+		return fileSizeLines(arguments)
+	case "file_find_glob":
+		return fileFindGlob(arguments)
 	default:
 		return fmt.Sprintf("error: unknown tool: %s", name)
 	}
@@ -36,22 +48,22 @@ func loadTools(path string) []anyllm.Tool {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Printf("Could not load tools: %v", err)
+		log.Error().Err(err).Msg("could not load tools")
 		return []anyllm.Tool{}
 	}
 
 	err = json.Unmarshal(data, &tl)
 	if err != nil {
-		fmt.Printf("Could not load tools: %v", err)
+		log.Error().Err(err).Msg("could not load tools")
 		return []anyllm.Tool{}
 	}
 
 	return tl.Tools
 }
 
-// LoadAllTools loads all of the tools from the various json files in the
+// loadAllTools loads all of the tools from the various json files in the
 // tools folder.
-func LoadAllTools() []anyllm.Tool {
+func loadAllTools() []anyllm.Tool {
 	var all []anyllm.Tool
 
 	// Load the system tools

@@ -78,17 +78,33 @@ func main() {
 		}
 
 		if prompt != "" {
-			plan := larkspur.Planner(provider.(*ollama.Provider), prompt)
+			// Keep track of our context throughout the plan execution.
+			var mc strings.Builder
 
-			fmt.Printf("Plan: %s\n", plan)
+			plan, err := larkspur.GeneratePlan(provider.(*ollama.Provider), prompt)
+			if err != nil {
+				fmt.Println("Agent ☹️: I was unable to create a plan. Please make your request again.")
+				continue
+			}
 
-			// if route != "" {
-			// 	response := larkspur.Chat(provider.(*ollama.Provider), route)
+			fmt.Printf("Agent 🫡: %s\n", plan.UserGoal)
+			mc.WriteString(fmt.Sprintf("User goal: %s\n", plan.UserGoal))
 
-			// 	fmt.Printf("Agent 🥳: %s\n", response)
-			// 	fmt.Println()
-			// 	fmt.Println()
-			// }
+			for i, task := range plan.TaskList {
+				fmt.Printf("Agent 🤓: %s\n", task.Prompt)
+				mc.WriteString(fmt.Sprintf("Task %d Prompt: %s\n", i, task.Prompt))
+
+				resp, err := larkspur.Chat(provider.(*ollama.Provider), mc.String())
+				if err != nil {
+					fmt.Println("Agent ☹️: I was unable to create a plan. Please make your request again.")
+					break
+				}
+
+				fmt.Printf("Agent 😀: %s\n", resp)
+				mc.WriteString(fmt.Sprintf("Task %d Response: %s", i, resp))
+
+				fmt.Printf("Context Length: %d", mc.Len())
+			}
 		}
 	}
 }

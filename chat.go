@@ -17,7 +17,7 @@ type chatArguments struct {
 
 // Chat executes a ReAct loop using the given provider, model, and prompt.
 // The final response is returned once the loop finishes.
-func Chat(provider *ollama.Provider, route string) string {
+func Chat(provider *ollama.Provider, route string) (string, error) {
 	var final string
 	var args chatArguments
 
@@ -26,7 +26,7 @@ func Chat(provider *ollama.Provider, route string) string {
 	err := json.Unmarshal([]byte(route), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("invalid arguments")
-		return ""
+		return "", err
 	}
 
 	// Get the agent information from the agent name. This includes the model,
@@ -53,7 +53,7 @@ func Chat(provider *ollama.Provider, route string) string {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("invalid response")
-			break
+			return "", err
 		}
 
 		// Add the response message to the message list
@@ -61,15 +61,6 @@ func Chat(provider *ollama.Provider, route string) string {
 		
 		// Capture the message content in case it is our final message
 		final = fmt.Sprintf("%s", resp.Choices[0].Message.Content)
-
-		// // If the model provided reasoning,  to the message list.
-		// if message.Reasoning != nil {
-		// 	fmt.Printf("%s 🤔: %s\n", args.Agent, message.Reasoning.Content)
-		// 	messages = append(messages, anyllm.Message{
-		// 		Role:    anyllm.RoleAssistant,
-		// 		Content: message.Reasoning.Content,
-		// 	})
-		// }
 
 		// If the model wants to call tools, execute each one and append the
 		// results to the message list.
@@ -96,5 +87,5 @@ func Chat(provider *ollama.Provider, route string) string {
 		}
 	}
 
-	return final
+	return final, nil
 }

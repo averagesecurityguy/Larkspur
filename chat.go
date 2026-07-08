@@ -3,41 +3,26 @@ package larkspur
 import (
 	"context"
 	"fmt"
-	"encoding/json"
 
-	"github.com/rs/zerolog/log"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers/ollama"
+	"github.com/rs/zerolog/log"
 )
-
-type chatArguments struct {
-	Agent string `json:"agent"`
-	Prompt string `json:"prompt"`
-}
 
 // Chat executes a ReAct loop using the given provider, model, and prompt.
 // The final response is returned once the loop finishes.
-func Chat(provider *ollama.Provider, route string) (string, error) {
+func Chat(provider *ollama.Provider, agentName, prompt string) (string, error) {
 	var final string
-	var args chatArguments
-
-	// Get our arguments from the route string. Includes the agent name and
-	// the updated prompt.
-	err := json.Unmarshal([]byte(route), &args)
-	if err != nil {
-		log.Error().Err(err).Msg("invalid arguments")
-		return "", err
-	}
 
 	// Get the agent information from the agent name. This includes the model,
 	// the tools, and the system prompt.
-	agent := getAgent(args.Agent)
+	agent := getAgent(agentName)
 
 	// Set the initial messages for this chat. Includes the system prompt and
 	// and the user's prompt.
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: agent.system},
-		{Role: anyllm.RoleUser, Content: args.Prompt},
+		{Role: anyllm.RoleUser, Content: prompt},
 	}
 
 	// Run the ReAct loop appending each LLM response and the results of each
@@ -56,9 +41,11 @@ func Chat(provider *ollama.Provider, route string) (string, error) {
 			return "", err
 		}
 
+		log.Debug().Msg(fmt.Sprintf("%v", resp))
+
 		// Add the response message to the message list
 		messages = append(messages, resp.Choices[0].Message)
-		
+
 		// Capture the message content in case it is our final message
 		final = fmt.Sprintf("%s", resp.Choices[0].Message.Content)
 
@@ -66,7 +53,7 @@ func Chat(provider *ollama.Provider, route string) (string, error) {
 		// results to the message list.
 		if resp.Choices[0].FinishReason == anyllm.FinishReasonToolCalls {
 			for _, tc := range resp.Choices[0].Message.ToolCalls {
-				result := executeTool(tc.Function.Name, tc.Function.Arguments)
+				result := ExecuteTool(tc.Function.Name, tc.Function.Arguments)
 				log.Debug().
 					Str("function", tc.Function.Name).
 					Str("arguments", tc.Function.Arguments).

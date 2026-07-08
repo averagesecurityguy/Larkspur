@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rs/zerolog/log"
 	anyllm "github.com/mozilla-ai/any-llm-go"
+	"github.com/rs/zerolog/log"
 )
 
 type toolList struct {
@@ -15,12 +15,12 @@ type toolList struct {
 }
 
 // executeTool calls the appropriate function based on the tool name.
-func executeTool(name, arguments string) string {
+func ExecuteTool(name, arguments string) string {
 	log.Info().
 		Str("name", name).
 		Str("arguments", arguments).
 		Msg("executing tool")
-	
+
 	switch name {
 	case "system_command":
 		return systemCommand(arguments)
@@ -41,7 +41,7 @@ func executeTool(name, arguments string) string {
 	}
 }
 
-// loadSystemTools loads the list of system tools defined in the system.json
+// loadTools loads the list of tools defined in the given path
 // file in the tools folder.
 func loadTools(path string) []anyllm.Tool {
 	var tl toolList

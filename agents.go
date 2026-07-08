@@ -5,7 +5,7 @@ import (
 )
 
 type agent struct {
-	model string
+	model  string
 	system string
 	tools  []anyllm.Tool
 }
@@ -21,9 +21,9 @@ var developerAgent = &agent{
 }
 
 var generalistAgent = &agent{
-	model: "llama3.2",
+	model:  "llama3.2",
 	system: `You are a helpful assistant.`,
-	tools: loadAllTools(),
+	tools:  loadAllTools(),
 }
 
 func getAgent(name string) *agent {

@@ -2,10 +2,10 @@ package larkspur
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,7 +188,7 @@ func fileSizeBytes(arguments string) string {
 
 	if args.Name == "" {
 		log.Error().Err(err).Msg("missing file name")
-		return fmt.Sprintf("file_size_bytes: error: missing file name")	
+		return fmt.Sprintf("file_size_bytes: error: missing file name")
 	}
 
 	f, err := os.Open(filepath.Clean(args.Name))

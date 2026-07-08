@@ -81,29 +81,41 @@ func main() {
 			// Keep track of our context throughout the plan execution.
 			var mc strings.Builder
 
+			// Build a plan
 			plan, err := larkspur.GeneratePlan(provider.(*ollama.Provider), prompt)
 			if err != nil {
 				fmt.Println("Agent ☹️: I was unable to create a plan. Please make your request again.")
 				continue
 			}
 
+			// Execute our plan one task at a time.
 			fmt.Printf("Agent 🫡: %s\n", plan.UserGoal)
 			mc.WriteString(fmt.Sprintf("User goal: %s\n", plan.UserGoal))
 
-			for i, task := range plan.TaskList {
-				fmt.Printf("Agent 🤓: %s\n", task.Prompt)
-				mc.WriteString(fmt.Sprintf("Task %d Prompt: %s\n", i, task.Prompt))
+			for _, task := range plan.TaskList {
+				switch task.Actor {
+				case "tool":
+					fmt.Printf("%s ⚙️: %s", task.Name, task.Action)
 
-				resp, err := larkspur.Chat(provider.(*ollama.Provider), mc.String())
-				if err != nil {
-					fmt.Println("Agent ☹️: I was unable to create a plan. Please make your request again.")
-					break
+					result := larkspur.ExecuteTool(task.Name, task.Action)
+					
+					mc.WriteString(result)
+				default:
+					fmt.Printf("%s 🤓: %s\n", task.Name, task.Action)
+
+					resp, err := larkspur.Chat(provider.(*ollama.Provider), task.Name, mc.String())
+					if err != nil {
+						fmt.Println("Agent ☹️: I was unable to execute the task.")
+						break
+					}
+
+					mc.WriteString(resp)
+						
 				}
 
-				fmt.Printf("Agent 😀: %s\n", resp)
-				mc.WriteString(fmt.Sprintf("Task %d Response: %s", i, resp))
-
-				fmt.Printf("Context Length: %d", mc.Len())
+				fmt.Printf("Context: %s\n", mc.String())
+				fmt.Printf("Context Length: %d\n", mc.Len())
+				fmt.Println("-----------------------------\n")
 			}
 		}
 	}

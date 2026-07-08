@@ -7,151 +7,83 @@ package larkspur
 // and the agentPlan struct must stay in alignment.
 
 import (
-	"fmt"
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 
-	"github.com/rs/zerolog/log"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers/ollama"
+	"github.com/rs/zerolog/log"
 )
 
 var (
-	agentPlanCreatorModel = "gemma4:e2b"
-	agentPlanCreatorPrompt = `
-	You analyze a user's request to understand their goal then you create a
-	detailed list of step-by-step tasks that need to be completed by other LLM
-	agents to achieve the user's goal. You do not attempt to answer the user's
-	request directly, you only return an AgentPlanResponse that defines the
-	user's overall goal and contains a list of step-by-step tasks that will be
-	completed by other LLM agents. For each task, you need to decide the best
-	LLM agent to complete the task and you need to write a prompt for the LLM
-	agent that explains its task.
+	// Plan Creator
+	agentPlanCreatorModel  = "gemma4:e2b"
+	agentPlanCreatorTemp   = 0.9
+	agentPlanCreatorTopP   = 0.95
+	agentPlanCreatorPrompt = loadPrompt("prompts/plan_creator.md")
 
-	# Using Tools
-	There are a number of tools available to each of the LLM agents and these
-	tools should be used when planning out the tasks. The task prompt should
-	tell the LLM agent the appropriate tool and arguments to use to accomplish
-	its task.
+	// Plan Verifier
+	agentPlanVerifierModel  = "gemma4:e2b"
+	agentPlanVerifierTemp   = 0.9
+	agentPlanVerifierTopP   = 0.95
+	agentPlanVerifierPrompt = loadPrompt("prompts/plan_verifier.md")
 
-	# Example Request and Response
-	If the user provides a request like, 'Summarize the contents of the
-	agent.go file,' an appropriate response would look like:
-	
-	{
-		"user_goal": "The user needs to summarize the contents of the file agent.go",
-		"task_list": [
-			{
-				"agent": "generalist",
-				"prompt": "Use the file_find_glob tool with the argument **/agent*.go to find the file and return its full path."
-			},
-			{
-				"agent": "generalist",
-				"prompt": "Use the read_file_full tool with the full path you previously identified to read the contents of the file."
-			},
-			{
-				"agent": "generalist",
-				"prompt": "Summarize the file contents you previously read and return the summary to the user."
-			}
-		]
-	}
-
-	# Available Agents
-	- **developer** - If the user's goal requires any software development
-	tasks such as writing programs, scripts, or functions or building software
-	repository contents, route the request to the 'developer' agent.
-	- **generalist** - If the user's request is not better served by one of the
-	other agents, route it to the 'generalist' agent.
-
-	# Creating Task Prompts
-	When creating the prompt for each task ensure that it is detailed enough
-	for the LLM agent to complete the task but do not make it overly verbose.
-	The prompt should be written primarily for use by an LLM agent not a
-	human user.
-	`
-	agentPlanVerifierModel = "gemma4:e2b"
-	agentPlanVerifierPrompt = `
-	You review an AgentPlanResponse to ensure the task_list is sufficient to
-	meet the user_goal. You first review the task_list to ensure there are no
-	missing tasks and that there are no tasks that need to be split up into
-	smaller tasks. If there are missing tasks you create them and put them in
-	the correct order within the task list. If a task needs to be split, you
-	create the new tasks and replace the old task with the set of smaller
-	tasks. Finally, you review each task to ensure the agent and prompt are
-	correct and verify any recommended tools and arguments in the response.
-	If there are no changes needed return the original plan as is. If changes
-	are needed return the updated AgentPlanResponse.
-
-	# Available Agents
-	- **developer** - If the user's goal requires any software development
-	tasks such as writing programs, scripts, or functions or building software
-	repository contents, route the request to the 'developer' agent.
-	- **generalist** - If the user's request is not better served by one of the
-	other agents, route it to the 'generalist' agent.
-
-	# Verifying Tools
-	There are a number of tools available to each of the LLM agents and you
-	should verify the correct tool and arguments were chosen to accomplish the
-	given task.
-
-	# Verifying Task Prompts
-	When verifying the prompt for each task ensure that it is detailed enough
-	for the LLM agent to complete the task, remembering the prompt should be
-	written primarily for use by an LLM agent not a human user.
-	`
-	schemaStrict = true
+	// Plan Schema
+	schemaStrict      = true
 	agentPlanResponse = &anyllm.ResponseFormat{
-        Type: "json_schema",
-        JSONSchema: &anyllm.JSONSchema{
-            Name:   "AgentPlanResponse",
-            Strict: &schemaStrict,
-            Schema: agentPlanSchema,
-        },
-    }
+		Type:       "json_schema",
+		JSONSchema: loadSchema("AgentPlanResponse", "schemas/agent_plan.json"),
+	}
 )
 
+// loadPrompt loads the prompt at the given path or exits on failure.
+func loadPrompt(path string) string {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msg("could not load prompt")
+	}
+
+	return string(data)
+}
+
+// loadSchema loads the schema at the given path or exits on failure.
+func loadSchema(name, path string) *anyllm.JSONSchema {
+	var as anyllm.JSONSchema
+
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msg("could not load schema")
+	}
+
+	schema := make(map[string]any)
+	err = json.Unmarshal(data, &schema)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", path).Msg("could not load schema")
+	}
+
+	as.Name = name
+	as.Strict = &schemaStrict
+	as.Schema = schema
+
+	return &as
+}
+
 // agentPlan holds a single plan that is used to accomplish one user goal. The
-// agentPlan must stay in alignment with the agentPlanSchema below.
+// agentPlan struct must stay in alignment with the schema in
+// schemas/agent_plan.json.
 type agentPlan struct {
-	UserGoal string `json:"user_goal"`
-	TaskList [] agentTask `json:"task_list"`
+	UserGoal string      `json:"user_goal"`
+	TaskList []agentTask `json:"task_list"`
 }
 
 // agentTask holds a single task needed to accomplish a user goal.
 type agentTask struct {
-	Agent string `json:"agent"`
-	Prompt string `json:"prompt"`
-}
-
-// agentPlanSchema defines the JSON schema used by the LLM to create it's
-// response. The agentPlanSchema must stay in alignment with the agentPlan
-// above.
-var agentPlanSchema = map[string]any{
-    "type": "object",
-    "properties": map[string]any{
-    	"user_goal": map[string]any{
-    		"type": "string",
-    		"description": "The overall goal the user is trying to achieve by completing these tasks.",
-    	},
-    	"task_list": map[string]any{
-    		"type": "array",
-    		"items": map[string]any{
-    			"type": "object",
-    			"properties": map[string]any{
-    				"agent": map[string]any{
-    					"type": "string",
-    					"description": "the agent that should complete this task.",
-    				},
-    				"prompt": map[string]any{
-    					"type": "string",
-    					"description": "A prompt explaining to the agent the task that needs to be completed.",
-    				},
-    			},
-    			"required": []string{"agent", "prompt"},
-    		},
-    	},
-    },
-    "required": []string{"user_goal", "task_list"},
+	Actor  string `json:"actor"`
+	Name   string `json:"name"`
+	Action string `json:"action"`
 }
 
 // planCreator analyzes the user's prompt to build an agentPlan that will
@@ -161,17 +93,19 @@ func planCreator(provider *ollama.Provider, userPrompt string) (agentPlan, error
 
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: agentPlanCreatorPrompt},
-		{Role: anyllm.RoleUser, Content: fmt.Sprintf("User's request: %s\n", userPrompt)},
+		{Role: anyllm.RoleUser, Content: fmt.Sprintf("Analyze this user request: %s\n", userPrompt)},
 	}
 
 	ctx := context.Background()
 
 	resp, err := provider.Completion(ctx, anyllm.CompletionParams{
-		Model:      agentPlanCreatorModel,
-		Messages:   messages,
-		Tools:      loadAllTools(),
-		ResponseFormat: agentPlanResponse,
-		ReasoningEffort: anyllm.ReasoningEffortHigh,
+		Model:           agentPlanCreatorModel,
+		Messages:        messages,
+		Tools:           loadAllTools(),
+		Temperature:     &agentPlanCreatorTemp,
+		TopP:            &agentPlanCreatorTopP,
+		ResponseFormat:  agentPlanResponse,
+		ReasoningEffort: anyllm.ReasoningEffortLow,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("invalid response")
@@ -183,7 +117,8 @@ func planCreator(provider *ollama.Provider, userPrompt string) (agentPlan, error
 	// Convert the model response to an agentPlan
 	err = json.Unmarshal([]byte(planStr), &plan)
 	if err != nil {
-		log.Error().Err(err).Msg("could not parse response")
+		log.Error().Err(err).Str("plan", planStr).Msg("could not unmarshal response")
+		log.Debug().Str("response", planStr)
 		return plan, err
 	}
 
@@ -195,21 +130,22 @@ func planCreator(provider *ollama.Provider, userPrompt string) (agentPlan, error
 func planVerifier(provider *ollama.Provider, plan agentPlan) (agentPlan, error) {
 	planBytes, err := json.Marshal(plan)
 	if err != nil {
+		log.Error().Err(err).Msg("could not marshal plan")
 		return plan, err
 	}
 
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: agentPlanVerifierPrompt},
-		{Role: anyllm.RoleUser, Content: fmt.Sprintf("Analyze this AgentPlanResponse: %s", string(planBytes))},
+		{Role: anyllm.RoleUser, Content: fmt.Sprintf("Review this AgentPlanResponse: %s", string(planBytes))},
 	}
 
 	ctx := context.Background()
 
 	resp, err := provider.Completion(ctx, anyllm.CompletionParams{
-		Model:      agentPlanVerifierModel,
-		Messages:   messages,
-		Tools:      loadAllTools(),
-		ResponseFormat: agentPlanResponse,
+		Model:           agentPlanVerifierModel,
+		Messages:        messages,
+		Tools:           loadAllTools(),
+		ResponseFormat:  agentPlanResponse,
 		ReasoningEffort: anyllm.ReasoningEffortHigh,
 	})
 	if err != nil {

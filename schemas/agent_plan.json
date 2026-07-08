@@ -1,0 +1,35 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://averagesecurityguy.info/larkspur/agent_plan.json",
+    "title": "AgentPlanResponse",
+    "description": "Larkspur agent plan schema",
+    "type": "object",
+    "properties": {
+    	"user_goal": {
+    		"type": "string",
+    		"description": "The overall goal the user is trying to achieve by completing these tasks."
+    	},
+    	"task_list": {
+    		"type": "array",
+    		"items": {
+    			"type": "object",
+    			"properties": {
+                    "actor": {
+                        "enum": ["tool", "agent"],
+                        "description": "The actor that should complete a given task. This is either a tool or an angent."
+                    },
+    				"name": {
+    					"type": "string",
+    					"description": "The name of the tool or agent that should complete this task."
+    				},
+    				"action": {
+    					"type": "string",
+    					"description": "The tool arguments or an agent prompt describing the task that needs to be completed."
+    				}
+    			},
+    			"required": ["actor", "name", "action"]
+    		}
+    	}
+    },
+    "required": ["user_goal", "task_list"]
+}

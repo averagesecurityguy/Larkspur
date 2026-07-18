@@ -1,17 +1,17 @@
 package main
 
 import (
-	"fmt"
-	"time"
 	"context"
+	"fmt"
 	"os"
+	"time"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers/ollama"
 )
 
 func getProvider() anyllm.Provider {
-	provider, err := ollama.New(anyllm.WithTimeout(300 * time.Second))
+	provider, err := ollama.New(anyllm.WithTimeout(900 * time.Second))
 	if err != nil {
 		fmt.Printf("Bad provider config: %v\n", err)
 		os.Exit(exitCodeBadProvider)

@@ -18,7 +18,8 @@ var (
 	exitCodeNoLogFile   = 1
 	exitCodeBadProvider = 2
 	exitCodeNoProvider  = 3
-	quitStrings = []string{"/quit", "/q", "/exit"}
+	exitCodeBadLogFile  = 4
+	quitStrings         = []string{"/quit", "/q", "/exit"}
 )
 
 // usage displays the command line usage
@@ -43,9 +44,11 @@ func main() {
 	// Define our command line flags
 	var level string
 	var version bool
+	var logFileName string
 
-	flag.StringVar(&level, "level", "ERROR", "Set the logging level [ERROR, WARN, INFO, DEGUG]")
+	flag.StringVar(&level, "level", "ERROR", "Set the logging level [ERROR, WARN, INFO, DEBUG]")
 	flag.BoolVar(&version, "v", false, "Display the product version.")
+	flag.StringVar(&logFileName, "log", "larkspur.log", "Name of file where logs will be written.")
 
 	// Define our usage statement
 	flag.Usage = usage
@@ -59,7 +62,10 @@ func main() {
 		os.Exit(exitCodeNoError)
 	}
 
-	configureLogger(level)
+	logFile := openLogFile(logFileName)
+	defer logFile.Close()
+
+	configureLogger(level, logFile)
 	provider := getProvider()
 
 	for {
@@ -78,8 +84,9 @@ func main() {
 		}
 
 		if prompt != "" {
-			// Keep track of our context throughout the plan execution.
-			var mc strings.Builder
+			// Keep track of our context throughout the execution of the objective.
+			var oc strings.Builder
+			var final string
 
 			// Build a plan
 			plan, err := larkspur.GeneratePlan(provider.(*ollama.Provider), prompt)
@@ -89,34 +96,35 @@ func main() {
 			}
 
 			// Execute our plan one task at a time.
-			fmt.Printf("Agent 🫡: %s\n", plan.UserGoal)
-			mc.WriteString(fmt.Sprintf("User goal: %s\n", plan.UserGoal))
+			fmt.Printf("Agent 🫡: %s\n", plan.Objective)
+			oc.WriteString(fmt.Sprintf("Objective: %s\n", plan.Objective))
 
-			for _, task := range plan.TaskList {
-				switch task.Actor {
-				case "tool":
-					fmt.Printf("%s ⚙️: %s", task.Name, task.Action)
+			for i, goal := range plan.Goals {
+				// Keep track of our context throughout the execution of a particular goal.
+				var gc strings.Builder
 
-					result := larkspur.ExecuteTool(task.Name, task.Action)
-					
-					mc.WriteString(result)
-				default:
-					fmt.Printf("%s 🤓: %s\n", task.Name, task.Action)
+				// Add our objective context to the goal context
+				gc.WriteString(oc.String())
+				gc.WriteString(fmt.Sprintf("Goal %d: %s\n", i, goal.Goal))
 
-					resp, err := larkspur.Chat(provider.(*ollama.Provider), task.Name, mc.String())
-					if err != nil {
-						fmt.Println("Agent ☹️: I was unable to execute the task.")
-						break
-					}
-
-					mc.WriteString(resp)
-						
+				// Execute all of the tasks for this goal.
+				for _, task := range goal.TaskList {
+					fmt.Printf("%s\n", task)
+					final = task.Execute(provider, gc.String())
+					gc.WriteString(final)
 				}
 
-				fmt.Printf("Context: %s\n", mc.String())
-				fmt.Printf("Context Length: %d\n", mc.Len())
-				fmt.Println("-----------------------------\n")
+				// Summarize the single goal context into the objective context.
+				oc.WriteString(fmt.Sprintf("Goal %d of %d: %s\n", i, len(plan.Goals), goal.Goal))
+
+				resp, err := larkspur.Chat(provider.(*ollama.Provider), "summarizer", gc.String(), "")
+				if err != nil {
+					continue
+				}
+				oc.WriteString(fmt.Sprintf("%s\n", resp))
 			}
+
+			fmt.Printf("Agent 🥳: %s\n", final)
 		}
 	}
 }

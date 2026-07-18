@@ -1,35 +1,63 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://averagesecurityguy.info/larkspur/agent_plan.json",
-    "title": "AgentPlanResponse",
+    "$id": "https://github.com/averagesecurityguy/larkspur/schemas/agent_plan.json",
+    "title": "AgentPlan",
     "description": "Larkspur agent plan schema",
     "type": "object",
     "properties": {
-    	"user_goal": {
-    		"type": "string",
-    		"description": "The overall goal the user is trying to achieve by completing these tasks."
-    	},
-    	"task_list": {
-    		"type": "array",
-    		"items": {
-    			"type": "object",
-    			"properties": {
-                    "actor": {
-                        "enum": ["tool", "agent"],
-                        "description": "The actor that should complete a given task. This is either a tool or an angent."
-                    },
-    				"name": {
-    					"type": "string",
-    					"description": "The name of the tool or agent that should complete this task."
-    				},
-    				"action": {
-    					"type": "string",
-    					"description": "The tool arguments or an agent prompt describing the task that needs to be completed."
-    				}
-    			},
-    			"required": ["actor", "name", "action"]
-    		}
-    	}
+        "objective": {
+            "type": "string",
+            "description": "The objective that will be met by working through each of the user_goals."
+        },
+        "goals": {
+            "type": "array",
+            "description": "A list of goals the client wants to accomplish.",
+            "minItems": 1,
+            "items": {
+                "goal": {
+                    "type": "string",
+                    "description": "A single goal a client is trying to achieve by completing the task_list."
+                },
+                "task_list": {
+                    "type": "array",
+                    "description": "A list of tasks needed to complete the user_goal.",
+                    "minItems": 1,
+                    "items": {
+                        "anyOf": [
+                            {
+                                "description": "A task that needs to be completed by an agent.",
+                                "properties": {
+                                    "agent": {
+                                        "type": "string",
+                                        "description": "The name of the agent that should be used to complete this task."
+                                    },
+                                    "prompt": {
+                                        "type": "string",
+                                        "description": "The prompt explaining what the agent should do."
+                                    }
+                                },
+                                "required": ["agent", "prompt"]
+                            },
+                            {
+                                "description": "A task that needs to be completed by a tool.",
+                                "properties": {
+                                    "function": {
+                                        "type": "string",
+                                        "description": "The name of the tool needed to complete the task."
+                                    },
+                                    "params": {
+                                        "type": "string",
+                                        "description": "The parameters needed by the tool."
+                                    }
+                                },
+                                "required": ["function", "params"]
+                            }
+                        ]
+                    }
+                }
+            },
+            "required": ["goal", "task_list"]
+        }
     },
-    "required": ["user_goal", "task_list"]
+    "required": ["objective", "goals"]    
 }

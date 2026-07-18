@@ -15,12 +15,7 @@ type toolList struct {
 }
 
 // executeTool calls the appropriate function based on the tool name.
-func ExecuteTool(name, arguments string) string {
-	log.Info().
-		Str("name", name).
-		Str("arguments", arguments).
-		Msg("executing tool")
-
+func executeTool(name, arguments string) string {
 	switch name {
 	case "system_command":
 		return systemCommand(arguments)
@@ -37,6 +32,7 @@ func ExecuteTool(name, arguments string) string {
 	case "file_find_glob":
 		return fileFindGlob(arguments)
 	default:
+		log.Error().Msgf("error: unknown tool: %s", name)
 		return fmt.Sprintf("error: unknown tool: %s", name)
 	}
 }

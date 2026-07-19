@@ -12,13 +12,8 @@ import (
 	"strings"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
-	"github.com/mozilla-ai/any-llm-go/providers/ollama"
 	"github.com/rs/zerolog/log"
 )
-
-type Tasker interface {
-	Execute(anyllm.Provider, string) string
-}
 
 // agentPlan holds a single plan that is used to accomplish one user goal. The
 // agentPlan struct must stay in alignment with the schema in
@@ -29,48 +24,27 @@ type agentPlan struct {
 }
 
 type goal struct {
-	Goal     string   `json:"goal"`
-	TaskList []Tasker `json:"task_list"`
+	Goal    string `json:"goal"`
+	Agent   string `json:"agent"`
+	Prompt  string `json:"prompt"`
 }
 
-// agentTask holds a single task needed to accomplish a user goal.
-type agentTask struct {
-	Agent  string `json:"agent"`
-	Prompt string `json:"prompt"`
+func (g goal) String() string {
+	return fmt.Sprintf("%s 🤓: %s\n", g.Agent, g.Goal)
 }
 
-func (at agentTask) String() string {
-	return fmt.Sprintf("%s 🤓: %s\n", at.Agent, at.Prompt)
-}
-
-func (at *agentTask) Execute(p *ollama.Provider, con string) string {
-	resp, err := Chat(p, at.Agent, at.Prompt, con)
+func (g *goal) Execute(p anyllm.Provider, con string) (string, error) {
+	resp, err := Chat(p, g.Agent, g.Prompt, con)
 	if err != nil {
-		fmt.Println("Agent ☹️: I was unable to execute the task.")
-		return ""
+		log.Error().Err(err).Msg("failed to execute task")
+		return "", fmt.Errorf("failed to execute task")
 	}
 
-	return fmt.Sprintf("%s\n-----\n%s\n", at.Prompt, resp)
-}
-
-// toolTask holds a single task needed to accomplish a user goal.
-type toolTask struct {
-	Function string `json:"function"`
-	Params   string `json:"params"`
-}
-
-func (tt toolTask) String() string {
-	return fmt.Sprintf("%s ⚙️: %s", tt.Function, tt.Params)
-}
-
-func (tt *toolTask) Execute(p *ollama.Provider, con string) string {
-	result := executeTool(tt.Function, tt.Params)
-
-	return fmt.Sprintf("%s\n-----\n%s\n", tt.Function, result)
+	return fmt.Sprintf("%s\n-----\n%s\n", g.Goal, resp), nil
 }
 
 // GeneratePlan creates and verifies a plan based on a user prompt.
-func GeneratePlan(provider *ollama.Provider, userPrompt string) (agentPlan, error) {
+func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error) {
 	var plan agentPlan
 
 	userPrompt = fmt.Sprintf("Please create a plan to meet the following objective: %s\n", userPrompt)
@@ -102,3 +76,15 @@ func GeneratePlan(provider *ollama.Provider, userPrompt string) (agentPlan, erro
 
 	return plan, nil
 }
+
+// SummarizePlanResults provides a brief summary of the plan results.
+func SummarizePlanResults(provider anyllm.Provider, planResult string) string {
+	result, err := Chat(provider, planSummarizerAgentName, planResult, "")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to explain plan results")
+		return ""
+	}
+
+	return result
+}
+

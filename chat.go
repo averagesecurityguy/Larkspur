@@ -5,13 +5,12 @@ import (
 	"fmt"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
-	"github.com/mozilla-ai/any-llm-go/providers/ollama"
 	"github.com/rs/zerolog/log"
 )
 
 // Chat executes a ReAct loop using the given provider, model, and prompt.
 // The final response is returned once the loop finishes.
-func Chat(provider *ollama.Provider, agentName, prompt, promptContext string) (string, error) {
+func Chat(provider anyllm.Provider, agentName, prompt, promptContext string) (string, error) {
 	var final string
 
 	// Get the agent information from the agent name. This includes the model,

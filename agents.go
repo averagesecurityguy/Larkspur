@@ -39,7 +39,7 @@ var (
 
 	generalistAgentName = "generalist"
 	generalistAgent     = &agent{
-		model:     "llama3.2",
+		model:     "gemma4:e2b",
 		system:    `You are a helpful assistant.`,
 		tools:     loadAllTools(),
 		temp:      1.0,
@@ -47,16 +47,25 @@ var (
 		reasoning: anyllm.ReasoningEffortHigh,
 	}
 
-	summarizerAgentName = "summarizer"
-	summarizerAgent     = &agent{
-		model: "llama3.2",
+	contextCompactorAgentName = "compactor"
+	contextCompactorAgent     = &agent{
+		model: "gemma4:e2b",
 		system: `
 		You faithfully summarize the given content ensuring only the most valuable
 		information is kept. Your summaries will be read by other LLM agents.
 		`,
 		temp:      1.0,
 		topP:      0.95,
-		reasoning: anyllm.ReasoningEffortHigh,
+		reasoning: anyllm.ReasoningEffortLow,
+	}
+
+	planSummarizerAgentName = "summarizer"
+	planSummarizerAgent     = &agent{
+		model:     "gemma4:e2b",
+		system:    loadContent("prompts/plan_summarizer.md"),
+		temp:      1.0,
+		topP:      0.95,
+		reasoning: anyllm.ReasoningEffortLow,
 	}
 
 	planCreatorAgentName = "creator"
@@ -101,10 +110,12 @@ func getAgent(name string) *agent {
 		return planCreatorAgent
 	case planVerifierAgentName:
 		return planVerifierAgent
+	case planSummarizerAgentName:
+		return planSummarizerAgent
+	case contextCompactorAgentName:
+		return contextCompactorAgent
 	case developerAgentName:
 		return developerAgent
-	case summarizerAgentName:
-		return summarizerAgent
 	default:
 		return generalistAgent
 	}

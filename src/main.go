@@ -86,7 +86,6 @@ func main() {
 		if prompt != "" {
 			// Keep track of our context throughout the execution of the objective.
 			var oc strings.Builder
-			var final string
 
 			// Build a plan
 			plan, err := larkspur.GeneratePlan(provider.(*ollama.Provider), prompt)
@@ -96,7 +95,7 @@ func main() {
 			}
 
 			// Execute our plan one task at a time.
-			fmt.Printf("Agent 🫡: %s\n", plan.Objective)
+			fmt.Printf("📂: %s\n", plan.Objective)
 			oc.WriteString(fmt.Sprintf("Objective: %s\n", plan.Objective))
 
 			for i, goal := range plan.Goals {
@@ -107,23 +106,20 @@ func main() {
 				gc.WriteString(oc.String())
 				gc.WriteString(fmt.Sprintf("Goal %d: %s\n", i, goal.Goal))
 
-				// Execute all of the tasks for this goal.
-				for _, task := range goal.TaskList {
-					fmt.Printf("%s\n", task)
-					final = task.Execute(provider, gc.String())
-					gc.WriteString(final)
+				// Execute the call to the agent				
+				fmt.Printf("\t📝 %d of %d: %s\n", i, len(plan.Goals), goal.Goal)
+				result, err := goal.Execute(provider, gc.String())
+				if err != nil {
+					fmt.Println("\t\t❌ I was unable to meet the goal.")
 				}
+				fmt.Printf("\t\t✅ %s\n", result)
 
 				// Summarize the single goal context into the objective context.
 				oc.WriteString(fmt.Sprintf("Goal %d of %d: %s\n", i, len(plan.Goals), goal.Goal))
-
-				resp, err := larkspur.Chat(provider.(*ollama.Provider), "summarizer", gc.String(), "")
-				if err != nil {
-					continue
-				}
-				oc.WriteString(fmt.Sprintf("%s\n", resp))
+				oc.WriteString(result)
 			}
 
+			final := larkspur.SummarizePlanResults(provider, oc.String())
 			fmt.Printf("Agent 🥳: %s\n", final)
 		}
 	}

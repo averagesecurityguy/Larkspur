@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	"larkspur"
-
-	"github.com/mozilla-ai/any-llm-go/providers/ollama"
+	// "github.com/mozilla-ai/any-llm-go/providers/ollama"
 )
 
 var (
@@ -84,42 +83,32 @@ func main() {
 		}
 
 		if prompt != "" {
-			// Keep track of our context throughout the execution of the objective.
-			var oc strings.Builder
+			// Keep track of our context
+			oc := ""
 
 			// Build a plan
-			plan, err := larkspur.GeneratePlan(provider.(*ollama.Provider), prompt)
+			plan, err := larkspur.GeneratePlan(provider, prompt)
 			if err != nil {
-				fmt.Println("Agent ☹️: I was unable to create a plan. Please make your request again.")
+				fmt.Printf("Agent ☹️: I was unable to create a plan: %v./n", err)
 				continue
 			}
 
-			// Execute our plan one task at a time.
-			fmt.Printf("📂: %s\n", plan.Objective)
-			oc.WriteString(fmt.Sprintf("Objective: %s\n", plan.Objective))
+			fmt.Printf("---- PLAN ----\n%s\n---- END PLAN ----\n", plan)
 
-			for i, goal := range plan.Goals {
-				// Keep track of our context throughout the execution of a particular goal.
-				var gc strings.Builder
+			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc)
+			oc = larkspur.AppendContext(provider, oc, result)
 
-				// Add our objective context to the goal context
-				gc.WriteString(oc.String())
-				gc.WriteString(fmt.Sprintf("Goal %d: %s\n", i, goal.Goal))
+			// Verify our plan one check at a time.
+			for i, check := range plan.Checklist {
+				fmt.Printf("Checking %d of %d: %s\n", i+1, len(plan.Checklist), check)
 
-				// Execute the call to the agent				
-				fmt.Printf("\t📝 %d of %d: %s\n", i, len(plan.Goals), goal.Goal)
-				result, err := goal.Execute(provider, gc.String())
-				if err != nil {
-					fmt.Println("\t\t❌ I was unable to meet the goal.")
-				}
-				fmt.Printf("\t\t✅ %s\n", result)
+				prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
+				result := larkspur.Chat(provider, plan.Agent, prompt, oc)
 
-				// Summarize the single goal context into the objective context.
-				oc.WriteString(fmt.Sprintf("Goal %d of %d: %s\n", i, len(plan.Goals), goal.Goal))
-				oc.WriteString(result)
+				oc = larkspur.AppendContext(provider, oc, result)
 			}
 
-			final := larkspur.SummarizePlanResults(provider, oc.String())
+			final := larkspur.SummarizePlanResults(provider, oc)
 			fmt.Printf("Agent 🥳: %s\n", final)
 		}
 	}

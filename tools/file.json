@@ -52,7 +52,7 @@
           "properties": {
             "file_name": {
               "type": "string",
-              "description": "The name of the file to write."
+              "description": "The name of the file to read."
             },
             "start_line": {
               "type": "integer",
@@ -63,7 +63,7 @@
               "description": "The line at which to stop reading."
             }
           },
-          "required": ["file_name", "start", "stop"],
+          "required": ["file_name", "start_line", "stop_line"],
           "additionalProperties": false
         },
         "strict": true

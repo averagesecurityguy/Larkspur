@@ -16,6 +16,7 @@ type agent struct {
 	temp      float64
 	topP      float64
 	reasoning anyllm.ReasoningEffort
+	maxTries  int
 }
 
 var (
@@ -25,16 +26,17 @@ var (
 	// Various agents
 	developerAgentName = "developer"
 	developerAgent     = &agent{
-		model: "qwen3.5:0.8b",
+		model: "gemma4:e2b",
 		system: `
 		You are a senior software engineer with expertise in multiple languages.
 		You always write idiomatic, readable code and add appropriate comments
 		using each languages preferred documentation style.
 		`,
 		tools:     loadAllTools(),
-		temp:      1.0,
-		topP:      0.95,
-		reasoning: anyllm.ReasoningEffortHigh,
+		temp:      0.3,
+		topP:      0.9,
+		reasoning: anyllm.ReasoningEffortMedium,
+		maxTries:  8,
 	}
 
 	generalistAgentName = "generalist"
@@ -42,9 +44,10 @@ var (
 		model:     "gemma4:e2b",
 		system:    `You are a helpful assistant.`,
 		tools:     loadAllTools(),
-		temp:      1.0,
+		temp:      0.7,
 		topP:      0.95,
-		reasoning: anyllm.ReasoningEffortHigh,
+		reasoning: anyllm.ReasoningEffortNone,
+		maxTries:  5,
 	}
 
 	contextCompactorAgentName = "compactor"
@@ -54,18 +57,20 @@ var (
 		You faithfully summarize the given content ensuring only the most valuable
 		information is kept. Your summaries will be read by other LLM agents.
 		`,
-		temp:      1.0,
-		topP:      0.95,
+		temp:      0.3,
+		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortLow,
+		maxTries:  2,
 	}
 
 	planSummarizerAgentName = "summarizer"
 	planSummarizerAgent     = &agent{
 		model:     "gemma4:e2b",
 		system:    loadContent("prompts/plan_summarizer.md"),
-		temp:      1.0,
-		topP:      0.95,
+		temp:      0.4,
+		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortLow,
+		maxTries:  2,
 	}
 
 	planCreatorAgentName = "creator"
@@ -74,9 +79,10 @@ var (
 		model:     "gemma4:e2b",
 		system:    fmt.Sprintf("%s\n%s\n", planCreatorSystem, agentPlanSchema),
 		tools:     loadAllTools(),
-		temp:      1.0,
-		topP:      0.95,
+		temp:      0.2,
+		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortHigh,
+		maxTries:  4,
 	}
 
 	planVerifierAgentName = "verifier"
@@ -85,9 +91,10 @@ var (
 		model:     "gemma4:e2b",
 		system:    fmt.Sprintf("%s\n%s\n", planVerifierSystem, agentPlanSchema),
 		tools:     loadAllTools(),
-		temp:      1.0,
-		topP:      0.95,
+		temp:      0.3,
+		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortHigh,
+		maxTries:  4,
 	}
 )
 

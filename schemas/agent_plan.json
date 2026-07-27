@@ -7,33 +7,22 @@
     "properties": {
         "objective": {
             "type": "string",
-            "description": "The objective that will be met by working through each of the user_goals."
+            "description": "The objective the user is trying to obtain."
         },
-        "goals": {
+        "agent": {
+            "type": "string",
+            "description": "The agent that will complete the objective"
+        },
+        "checklist": {
             "type": "array",
-            "description": "A list of goals needed to accomplish the objective.",
+            "description": "A checklist of items that prove the objective was obtained.",
             "minItems": 1,
             "items": {
-                "type": "object",
-                "properties": {
-                    "goal": {
-                        "type": "string",
-                        "description": "A single goal a client is trying to achieve."
-                    },
-                    "agent": {
-                        "type": "string",
-                        "description": "The name of the agent that should be used to meet this goal."
-                    },
-                    "prompt": {
-                        "type": "string",
-                        "description": "The prompt explaining what the agent should do to meet the goal."
-                    },
-                },
-                "required": ["goal", "agent", "prompt"],
-                "additionalProperties": false
-            },
+                "type": "string",
+                "description": "A single check that should be performed to ensure the objective was obtained."
+            }
         }
     },
-    "required": ["objective", "goals"],
+    "required": ["objective", "agent", "checklist"],
     "additionalProperties": false    
 }

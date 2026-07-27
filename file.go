@@ -39,7 +39,7 @@ func fileWriteFull(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse JSON")
-		return fmt.Sprintf("file_write_full: error: could not parse JSON")
+		return fmt.Sprintf("file_write_full: error: %v", err)
 	}
 
 	if args.Name == "" {
@@ -63,7 +63,7 @@ func fileReadFull(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse JSON")
-		return fmt.Sprintf("file_read_full: error: could not parse JSON")
+		return fmt.Sprintf("file_read_full: error: %v", err)
 	}
 
 	if args.Name == "" {
@@ -88,7 +88,7 @@ func fileReadLines(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse arguments")
-		return fmt.Sprintf("file_read_lines: error: could not parse arguments")
+		return fmt.Sprintf("file_read_lines: error: %v", err)
 	}
 
 	if args.Name == "" {
@@ -147,7 +147,7 @@ func fileSizeLines(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse arguments")
-		return fmt.Sprintf("file_size_line: error: could not parse arguments")
+		return fmt.Sprintf("file_size_line: error: %v", err)
 	}
 
 	if args.Name == "" {
@@ -165,7 +165,11 @@ func fileSizeLines(arguments string) string {
 
 	for {
 		read, err = f.Read(buffer)
-		if err != nil && err != io.EOF {
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
 			log.Error().Err(err).Msg("could not read file")
 			return fmt.Sprintf("file_size_line: error: could not read file")
 		}
@@ -183,7 +187,7 @@ func fileSizeBytes(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse arguments")
-		return fmt.Sprintf("file_size_bytes: error: could not parse arguments")
+		return fmt.Sprintf("file_size_bytes: error: %v", err)
 	}
 
 	if args.Name == "" {
@@ -212,7 +216,7 @@ func fileFindGlob(arguments string) string {
 	err := json.Unmarshal([]byte(arguments), &args)
 	if err != nil {
 		log.Error().Err(err).Msg("could not parse arguments")
-		return fmt.Sprintf("file_find_glob: error: could not parse arguments")
+		return fmt.Sprintf("file_find_glob: error: %v", err)
 	}
 
 	if args.Glob == "" {

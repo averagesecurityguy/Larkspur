@@ -3,6 +3,7 @@ package larkspur
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +15,7 @@ type toolTest struct {
 func TestTool(t *testing.T) {
 	t.Run("Testing loadTools", testLoadTools)
 	t.Run("Testing LoadAllTools", testLoadAllTools)
+	t.Run("Testing truncateToolOutput", testTruncateToolOutput)
 }
 
 func testLoadTools(t *testing.T) {
@@ -50,8 +52,11 @@ func testLoadAllTools(t *testing.T) {
 		"file_write_full",
 		"file_read_full",
 		"file_read_lines",
+		"file_size_bytes",
+		"file_size_lines",
+		"file_find_glob",
 	}
-	tools := LoadAllTools()
+	tools := loadAllTools()
 	names := []string{}
 
 	for _, tool := range tools {
@@ -63,5 +68,25 @@ func testLoadAllTools(t *testing.T) {
 
 	if !slices.Equal(allNames, names) {
 		t.Fatalf("Expected `%v`, received `%v`", allNames, names)
+	}
+}
+
+func testTruncateToolOutput(t *testing.T) {
+	fmt.Println(t.Name())
+
+	short := "short output"
+	if got := truncateToolOutput("test_tool", short); got != short {
+		t.Fatalf("Expected `%s`, received `%s`", short, got)
+	}
+
+	long := strings.Repeat("a", maxToolOutputChars+100)
+	got := truncateToolOutput("test_tool", long)
+
+	if !strings.HasPrefix(got, long[:maxToolOutputChars]) {
+		t.Fatalf("Expected truncated output to start with the first %d characters of the original", maxToolOutputChars)
+	}
+
+	if !strings.Contains(got, "truncated") {
+		t.Fatalf("Expected truncated output to include a truncation note, received `%s`", got)
 	}
 }

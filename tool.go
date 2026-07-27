@@ -14,27 +14,58 @@ type toolList struct {
 	Tools []anyllm.Tool `json:"tools"`
 }
 
+// maxToolOutputChars caps how much of a single tool result is fed back into
+// the conversation. Derived from compactThreshold (chat.go) rather than its
+// own bare number, so it stays proportional if that budget is ever retuned:
+// an unbounded result (a large file, a verbose shell command) can otherwise
+// burn most of a single try's share of the budget and starve every turn
+// after it.
+const maxToolOutputChars = compactThreshold / 10
+
 // executeTool calls the appropriate function based on the tool name.
 func executeTool(name, arguments string) string {
+	var result string
+
 	switch name {
 	case "system_command":
-		return systemCommand(arguments)
+		result = systemCommand(arguments)
 	case "file_write_full":
-		return fileWriteFull(arguments)
+		result = fileWriteFull(arguments)
 	case "file_read_full":
-		return fileReadFull(arguments)
+		result = fileReadFull(arguments)
 	case "file_read_lines":
-		return fileReadLines(arguments)
+		result = fileReadLines(arguments)
 	case "file_size_bytes":
-		return fileSizeBytes(arguments)
+		result = fileSizeBytes(arguments)
 	case "file_size_lines":
-		return fileSizeLines(arguments)
+		result = fileSizeLines(arguments)
 	case "file_find_glob":
-		return fileFindGlob(arguments)
+		result = fileFindGlob(arguments)
 	default:
 		log.Error().Msgf("error: unknown tool: %s", name)
 		return fmt.Sprintf("error: unknown tool: %s", name)
 	}
+
+	return truncateToolOutput(name, result)
+}
+
+// truncateToolOutput trims a tool result down to maxToolOutputChars so a
+// single call cannot dominate the shared context window.
+func truncateToolOutput(name, result string) string {
+	if len(result) <= maxToolOutputChars {
+		return result
+	}
+
+	log.Warn().
+		Str("tool", name).
+		Int("size", len(result)).
+		Int("limit", maxToolOutputChars).
+		Msg("tool output truncated")
+
+	return fmt.Sprintf(
+		"%s\n...output truncated at %d of %d characters. Use a more targeted tool call (e.g. file_read_lines) to see more.",
+		result[:maxToolOutputChars], maxToolOutputChars, len(result),
+	)
 }
 
 // loadTools loads the list of tools defined in the given path

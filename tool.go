@@ -116,3 +116,18 @@ func loadAllTools() []anyllm.Tool {
 
 	return all
 }
+
+// loadExecutionTools loads every tool available to agents that carry out and
+// verify plan objectives (developer, generalist), including task_checkpoint.
+// Plan creation and verification use loadAllTools instead, since
+// task_checkpoint only makes sense once a plan, and therefore a planID,
+// exists.
+func loadExecutionTools() []anyllm.Tool {
+	all := loadAllTools()
+
+	for _, tool := range loadTools(filepath.Join(".", "tools", "checkpoint.json")) {
+		all = append(all, tool)
+	}
+
+	return all
+}

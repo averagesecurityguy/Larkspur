@@ -15,6 +15,7 @@ type toolTest struct {
 func TestTool(t *testing.T) {
 	t.Run("Testing loadTools", testLoadTools)
 	t.Run("Testing LoadAllTools", testLoadAllTools)
+	t.Run("Testing loadExecutionTools", testLoadExecutionTools)
 	t.Run("Testing truncateToolOutput", testTruncateToolOutput)
 }
 
@@ -60,6 +61,37 @@ func testLoadAllTools(t *testing.T) {
 		"memory_put",
 	}
 	tools := loadAllTools()
+	names := []string{}
+
+	for _, tool := range tools {
+		names = append(names, tool.Function.Name)
+	}
+
+	slices.Sort(names)
+	slices.Sort(allNames)
+
+	if !slices.Equal(allNames, names) {
+		t.Fatalf("Expected `%v`, received `%v`", allNames, names)
+	}
+}
+
+func testLoadExecutionTools(t *testing.T) {
+	fmt.Println(t.Name())
+
+	allNames := []string{
+		"system_command",
+		"file_write_full",
+		"file_read_full",
+		"file_read_lines",
+		"file_size_bytes",
+		"file_size_lines",
+		"file_find_glob",
+		"memory_search",
+		"memory_get",
+		"memory_put",
+		"task_checkpoint",
+	}
+	tools := loadExecutionTools()
 	names := []string{}
 
 	for _, tool := range tools {

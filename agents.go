@@ -35,7 +35,7 @@ var (
 		You always write idiomatic, readable code and add appropriate comments
 		using each languages preferred documentation style.
 		`,
-		tools:     loadAllTools(),
+		tools:     loadExecutionTools(),
 		temp:      0.3,
 		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortMedium,
@@ -46,7 +46,7 @@ var (
 	generalistAgent     = &agent{
 		model:     "gemma4:e2b",
 		system:    `You are a helpful assistant.`,
-		tools:     loadAllTools(),
+		tools:     loadExecutionTools(),
 		temp:      0.7,
 		topP:      0.95,
 		reasoning: anyllm.ReasoningEffortNone,

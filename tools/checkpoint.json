@@ -1,0 +1,23 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "task_checkpoint",
+        "description": "task_checkpoint records what you should do next on your current task, so you can pick back up from here if your task history gets summarized or you otherwise lose track of where you were. Call it after completing a meaningful step or whenever you figure out what to do next.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "next_step": {
+              "type": "string",
+              "description": "A short, concrete description of the next thing to do to complete the current task."
+            }
+          },
+          "required": ["next_step"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    }
+  ]
+}

@@ -25,6 +25,7 @@ func TestMemory(t *testing.T) {
 	t.Run("Testing memoryPut and memoryGet", testMemoryPutAndGet)
 	t.Run("Testing memoryGet missing key", testMemoryGetMissing)
 	t.Run("Testing memorySearch", testMemorySearch)
+	t.Run("Testing checkpoint lifecycle", testCheckpointLifecycle)
 	t.Run("Testing storeMemory with no store", testStoreMemoryNoStore)
 }
 
@@ -64,6 +65,48 @@ func testMemorySearch(t *testing.T) {
 	got = memorySearch(`{"query": "no-such-thing"}`)
 	if got != "No matching memories" {
 		t.Fatalf("Expected `No matching memories`, received `%s`", got)
+	}
+}
+
+func testCheckpointLifecycle(t *testing.T) {
+	fmt.Println(t.Name())
+
+	planID := "plan-123"
+
+	if got := getCheckpoint(planID); got != "" {
+		t.Fatalf("Expected no checkpoint yet, received `%s`", got)
+	}
+
+	missing := taskCheckpoint(planID, `{"next_step": ""}`)
+	if !strings.Contains(missing, "error") {
+		t.Fatalf("Expected an error for a missing next_step, received `%s`", missing)
+	}
+
+	set := taskCheckpoint(planID, `{"next_step": "write the tests"}`)
+	if set != "task_checkpoint: success" {
+		t.Fatalf("Expected `task_checkpoint: success`, received `%s`", set)
+	}
+
+	if got := getCheckpoint(planID); got != "write the tests" {
+		t.Fatalf("Expected `write the tests`, received `%s`", got)
+	}
+
+	noteCheckpointAction(planID, "file_read_full", `{"file_name": "main.go"}`)
+
+	got := getCheckpoint(planID)
+	if !strings.Contains(got, "file_read_full") {
+		t.Fatalf("Expected breadcrumb to mention file_read_full, received `%s`", got)
+	}
+
+	clearCheckpoint(planID)
+
+	if got := getCheckpoint(planID); got != "" {
+		t.Fatalf("Expected checkpoint to be cleared, received `%s`", got)
+	}
+
+	// A checkpoint scoped to no plan is always empty and never stored.
+	if got := getCheckpoint(""); got != "" {
+		t.Fatalf("Expected no checkpoint for an empty planID, received `%s`", got)
 	}
 }
 

@@ -108,7 +108,7 @@ func main() {
 
 			fmt.Printf("---- PLAN ----\n%s\n---- END PLAN ----\n", plan)
 
-			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc)
+			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc, plan.PlanID)
 			oc = larkspur.AppendContext(provider, oc, result)
 
 			// Verify our plan one check at a time.
@@ -116,13 +116,13 @@ func main() {
 				fmt.Printf("Checking %d of %d: %s\n", i+1, len(plan.Checklist), check)
 
 				prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
-				result := larkspur.Chat(provider, plan.Agent, prompt, oc)
+				result := larkspur.Chat(provider, plan.Agent, prompt, oc, plan.PlanID)
 				fmt.Printf("-> %s\n", result)
 
 				oc = larkspur.AppendContext(provider, oc, result)
 			}
 
-			final := larkspur.SummarizePlanResults(provider, oc)
+			final := larkspur.SummarizePlanResults(provider, oc, plan.PlanID)
 			fmt.Printf("Agent 🥳: %s\n", final)
 		}
 	}

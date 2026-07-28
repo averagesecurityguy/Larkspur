@@ -35,6 +35,97 @@ func storeMemory(key, value string) error {
 	return memoryStore.Put(key, value)
 }
 
+// checkpointKeyPrefix namespaces checkpoint memories in the store so they
+// are easy to distinguish from durable, cross-session memories and can be
+// cleaned up once a plan finishes.
+const checkpointKeyPrefix = "checkpoint:"
+
+// checkpointKey returns the memory key used to store planID's checkpoint.
+func checkpointKey(planID string) string {
+	return checkpointKeyPrefix + planID
+}
+
+// getCheckpoint returns the current checkpoint for planID, or "" if none has
+// been recorded yet, planID is empty, or no memory store is available.
+func getCheckpoint(planID string) string {
+	if planID == "" || memoryStore == nil {
+		return ""
+	}
+
+	value, err := memoryStore.Get(checkpointKey(planID))
+	if err != nil {
+		return ""
+	}
+
+	return value
+}
+
+// putCheckpoint overwrites planID's checkpoint with value. It is a no-op
+// when planID is empty or no memory store is available, the same tolerance
+// storeMemory has for those contexts.
+func putCheckpoint(planID, value string) {
+	if planID == "" || memoryStore == nil {
+		return
+	}
+
+	if err := memoryStore.Put(checkpointKey(planID), value); err != nil {
+		log.Error().Err(err).Str("planID", planID).Msg("could not write checkpoint")
+	}
+}
+
+// clearCheckpoint removes planID's checkpoint once its plan has finished, so
+// it does not linger and surface in memory_search results for unrelated
+// future plans.
+func clearCheckpoint(planID string) {
+	if planID == "" || memoryStore == nil {
+		return
+	}
+
+	if err := memoryStore.Delete(checkpointKey(planID)); err != nil {
+		log.Error().Err(err).Str("planID", planID).Msg("could not clear checkpoint")
+	}
+}
+
+type taskCheckpointArgs struct {
+	NextStep string `json:"next_step"`
+}
+
+// taskCheckpoint records the agent's own account of what to do next for
+// planID, so a fresh Chat loop (the next checklist item, or the loop that
+// follows a history compaction) can remind the model where it left off
+// instead of losing the thread.
+func taskCheckpoint(planID, arguments string) string {
+	var args taskCheckpointArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("task_checkpoint: error: %v", err)
+	}
+
+	if args.NextStep == "" {
+		log.Error().Msg("missing next_step")
+		return fmt.Sprintf("task_checkpoint: error: missing next_step")
+	}
+
+	if planID == "" || memoryStore == nil {
+		return fmt.Sprintf("task_checkpoint: error: checkpoint not available")
+	}
+
+	putCheckpoint(planID, args.NextStep)
+
+	return "task_checkpoint: success"
+}
+
+// noteCheckpointAction overwrites planID's checkpoint with a mechanical
+// breadcrumb describing the tool call that was just made. It runs after
+// every non-checkpoint tool call in the ReAct loop so there is always a
+// checkpoint to recover from even if the agent never calls task_checkpoint
+// itself.
+func noteCheckpointAction(planID, toolName, arguments string) {
+	putCheckpoint(planID, fmt.Sprintf("last action: called %s with %s", toolName, arguments))
+}
+
 type memoryGetArgs struct {
 	Key string `json:"key"`
 }

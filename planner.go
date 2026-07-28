@@ -7,6 +7,7 @@ package larkspur
 // and the agentPlan struct must stay in alignment.
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -30,8 +31,12 @@ const (
 
 // agentPlan holds a single plan that is used to accomplish one user goal. The
 // agentPlan struct must stay in alignment with the schema in
-// schemas/agent_plan.json.
+// schemas/agent_plan.json. PlanID is not part of that schema — it is
+// generated locally once the plan is parsed, and scopes the checkpoint that
+// keeps the executing agent oriented across the objective and every
+// checklist item.
 type agentPlan struct {
+	PlanID    string   `json:"-"`
 	Objective string   `json:"objective"`
 	Agent     string   `json:"agent"`
 	Checklist []string `json:"checklist"`
@@ -43,7 +48,7 @@ func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error
 
 	userPrompt = fmt.Sprintf("Please create a plan to meet the following objective: %s\n", userPrompt)
 
-	planStr := Chat(provider, planCreatorAgentName, userPrompt, "")
+	planStr := Chat(provider, planCreatorAgentName, userPrompt, "", "")
 
 	planStr = strings.TrimPrefix(planStr, "```json")
 	planStr = strings.TrimSuffix(planStr, "```")
@@ -57,6 +62,8 @@ func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error
 		log.Error().Err(err).Msg("failed to generate a plan: marshaler")
 		return plan, fmt.Errorf("failed to gnerate a plan: marshaler")
 	}
+
+	plan.PlanID = rand.Text()
 
 	return plan, nil
 }
@@ -93,11 +100,14 @@ func parsePlanSummary(raw string) (planSummary, error) {
 	return summary, nil
 }
 
-// SummarizePlanResults provides a brief summary of the plan results and
+// SummarizePlanResults produces a brief summary of the plan results,
 // persists any memories the summarizer identified as worth remembering
-// across future sessions.
-func SummarizePlanResults(provider anyllm.Provider, planResult string) string {
-	raw := Chat(provider, planSummarizerAgentName, planResult, "")
+// across future sessions, and clears planID's checkpoint now that the plan
+// is finished.
+func SummarizePlanResults(provider anyllm.Provider, planResult, planID string) string {
+	defer clearCheckpoint(planID)
+
+	raw := Chat(provider, planSummarizerAgentName, planResult, "", planID)
 
 	summary, err := parsePlanSummary(raw)
 	if err != nil {
@@ -132,7 +142,7 @@ func AppendContext(provider anyllm.Provider, context, result string) string {
 		return combined
 	}
 
-	compacted := Chat(provider, contextCompactorAgentName, combined, "")
+	compacted := Chat(provider, contextCompactorAgentName, combined, "", "")
 
 	log.Debug().
 		Int("before", len(combined)).

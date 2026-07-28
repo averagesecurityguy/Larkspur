@@ -36,8 +36,13 @@ const (
 )
 
 // Chat executes a ReAct loop using the given provider, model, and prompt.
-// The final response is returned once the loop finishes.
-func Chat(provider anyllm.Provider, agentName, prompt, promptContext string) string {
+// planID scopes the run to a plan's checkpoint, letting the agent remind
+// itself what to do next across a history compaction and across the
+// separate Chat calls that make up a single plan (the objective, then each
+// checklist item). Pass "" when no plan is in progress, e.g. plan creation
+// itself or the compactor's own summarization calls. The final response is
+// returned once the loop finishes.
+func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID string) string {
 	var final string
 
 	// Get the agent information from the agent name. This includes the model,
@@ -62,6 +67,19 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext string) str
 		{Role: anyllm.RoleUser, Content: promptContext},
 		{Role: anyllm.RoleUser, Content: prompt},
 	}
+
+	if checkpoint := getCheckpoint(planID); checkpoint != "" {
+		messages = append(messages, anyllm.Message{
+			Role:    anyllm.RoleUser,
+			Content: fmt.Sprintf("Checkpoint from a previous turn on this task: %s", checkpoint),
+		})
+	}
+
+	// leading is the number of messages that make up this call's fixed
+	// context (system prompt, promptContext, prompt, and the checkpoint
+	// reminder if one was present), which compaction must always preserve
+	// untouched.
+	leading := len(messages)
 
 	// Run the ReAct loop appending each LLM response and the results of each
 	// tool call to the message list.
@@ -98,7 +116,22 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext string) str
 		// results to the message list.
 		if resp.Choices[0].FinishReason == anyllm.FinishReasonToolCalls {
 			for _, tc := range resp.Choices[0].Message.ToolCalls {
-				result := executeTool(tc.Function.Name, tc.Function.Arguments)
+				var result string
+
+				// task_checkpoint is scoped to this plan and records the
+				// agent's own account of what to do next, so it's handled
+				// here rather than through the stateless executeTool
+				// dispatch. Every other tool call still gets a mechanical
+				// checkpoint breadcrumb recorded after it runs, so there is
+				// always something to recover from even if the agent never
+				// checkpoints on its own.
+				if tc.Function.Name == "task_checkpoint" {
+					result = taskCheckpoint(planID, tc.Function.Arguments)
+				} else {
+					result = executeTool(tc.Function.Name, tc.Function.Arguments)
+					noteCheckpointAction(planID, tc.Function.Name, tc.Function.Arguments)
+				}
+
 				log.Debug().
 					Str("function", tc.Function.Name).
 					Str("arguments", tc.Function.Arguments).
@@ -135,7 +168,7 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext string) str
 		// the threshold, rather than letting it grow unbounded across
 		// every remaining try.
 		if messagesSize(messages) > compactThreshold {
-			messages = compactHistory(provider, messages)
+			messages = compactHistory(provider, messages, leading, planID)
 		}
 	}
 
@@ -165,34 +198,43 @@ func messagesSize(messages []anyllm.Message) int {
 	return size
 }
 
-// compactHistory replaces everything after the system prompt and the
-// initial user messages with a single summary produced by the compactor
-// agent. The system prompt and original prompt are always preserved
+// compactHistory replaces everything after the leading messages (the system
+// prompt, the initial context and prompt, and the checkpoint reminder if one
+// was present) with a single summary produced by the compactor agent, then
+// re-appends the current checkpoint so the model isn't left to recover its
+// task purely from that summary. The leading messages are always preserved
 // untouched so the agent never loses its own instructions or task, only the
 // accumulated tool calls and intermediate responses that led up to now.
-func compactHistory(provider anyllm.Provider, messages []anyllm.Message) []anyllm.Message {
-	// Nothing to compact yet: system prompt, context, and initial prompt.
-	if len(messages) <= 3 {
+func compactHistory(provider anyllm.Provider, messages []anyllm.Message, leading int, planID string) []anyllm.Message {
+	// Nothing to compact yet: only the leading messages are present.
+	if len(messages) <= leading {
 		return messages
 	}
 
 	var history strings.Builder
-	for _, m := range messages[3:] {
+	for _, m := range messages[leading:] {
 		fmt.Fprintf(&history, "%s: %s\n", m.Role, contentStr(m.Content))
 	}
 
-	summary := Chat(provider, contextCompactorAgentName, history.String(), "")
+	summary := Chat(provider, contextCompactorAgentName, history.String(), "", "")
 
 	log.Debug().
 		Int("before", messagesSize(messages)).
 		Str("summary", summary).
 		Msg("compacted chat history")
 
-	compacted := append([]anyllm.Message{}, messages[:3]...)
+	compacted := append([]anyllm.Message{}, messages[:leading]...)
 	compacted = append(compacted, anyllm.Message{
 		Role:    anyllm.RoleUser,
 		Content: fmt.Sprintf("Summary of work completed so far:\n%s", summary),
 	})
+
+	if checkpoint := getCheckpoint(planID); checkpoint != "" {
+		compacted = append(compacted, anyllm.Message{
+			Role:    anyllm.RoleUser,
+			Content: fmt.Sprintf("Checkpoint from a previous turn on this task: %s", checkpoint),
+		})
+	}
 
 	return compacted
 }

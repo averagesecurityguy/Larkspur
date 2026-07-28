@@ -80,15 +80,17 @@ func main() {
 
 	provider := getProvider()
 
+	// reader is created once, outside the loop. Recreating it on every
+	// iteration would discard any input already buffered internally past the
+	// first line read from a single underlying read, silently losing lines
+	// (e.g. a piped "/quit") and leaving the loop spinning on EOF forever
+	// once stdin is exhausted.
+	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		fmt.Printf("User: ")
 
-		reader := bufio.NewReader(os.Stdin)
 		prompt, err := reader.ReadString('\n')
-		if err != nil {
-			prompt = ""
-		}
-
 		prompt = strings.TrimSuffix(prompt, "\n")
 
 		if shouldExit(prompt) {
@@ -124,6 +126,12 @@ func main() {
 
 			final := larkspur.SummarizePlanResults(provider, oc, plan.PlanID)
 			fmt.Printf("Agent 🥳: %s\n", final)
+		}
+
+		// Stop once stdin is exhausted (EOF) or unreadable, rather than
+		// spinning forever re-printing the prompt.
+		if err != nil {
+			break
 		}
 	}
 }

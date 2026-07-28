@@ -8,17 +8,20 @@ import (
 	"strings"
 
 	"larkspur"
+	"larkspur/memory"
 	// "github.com/mozilla-ai/any-llm-go/providers/ollama"
 )
 
 var (
-	versionId           = "v0.1.0"
-	exitCodeNoError     = 0
-	exitCodeNoLogFile   = 1
-	exitCodeBadProvider = 2
-	exitCodeNoProvider  = 3
-	exitCodeBadLogFile  = 4
-	quitStrings         = []string{"/quit", "/q", "/exit"}
+	versionId              = "v0.1.0"
+	exitCodeNoError        = 0
+	exitCodeNoLogFile      = 1
+	exitCodeBadProvider    = 2
+	exitCodeNoProvider     = 3
+	exitCodeBadLogFile     = 4
+	exitCodeNoHomeDir      = 5
+	exitCodeBadMemoryStore = 6
+	quitStrings            = []string{"/quit", "/q", "/exit"}
 )
 
 // usage displays the command line usage
@@ -65,6 +68,16 @@ func main() {
 	defer logFile.Close()
 
 	configureLogger(level, logFile)
+
+	memStore, err := memory.NewStore(memoriesDBPath())
+	if err != nil {
+		fmt.Printf("Could not open memory store: %v\n", err)
+		os.Exit(exitCodeBadMemoryStore)
+	}
+	defer memStore.Close()
+
+	larkspur.SetMemoryStore(memStore)
+
 	provider := getProvider()
 
 	for {
@@ -104,6 +117,7 @@ func main() {
 
 				prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
 				result := larkspur.Chat(provider, plan.Agent, prompt, oc)
+				fmt.Printf("-> %s\n", result)
 
 				oc = larkspur.AppendContext(provider, oc, result)
 			}

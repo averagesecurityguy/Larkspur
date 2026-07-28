@@ -41,6 +41,12 @@ func executeTool(name, arguments string) string {
 		result = fileSizeLines(arguments)
 	case "file_find_glob":
 		result = fileFindGlob(arguments)
+	case "memory_search":
+		result = memorySearch(arguments)
+	case "memory_get":
+		result = memoryGet(arguments)
+	case "memory_put":
+		result = memoryPut(arguments)
 	default:
 		log.Error().Msgf("error: unknown tool: %s", name)
 		return fmt.Sprintf("error: unknown tool: %s", name)
@@ -102,5 +108,11 @@ func loadAllTools() []anyllm.Tool {
 	for _, tool := range loadTools(filepath.Join(".", "tools", "file.json")) {
 		all = append(all, tool)
 	}
+
+	// Load the memory tools
+	for _, tool := range loadTools(filepath.Join(".", "tools", "memory.json")) {
+		all = append(all, tool)
+	}
+
 	return all
 }

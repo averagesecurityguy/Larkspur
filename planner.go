@@ -61,9 +61,61 @@ func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error
 	return plan, nil
 }
 
-// SummarizePlanResults provides a brief summary of the plan results.
+// planSummary holds the parsed output of the summarizer agent: a
+// human-readable response plus any durable facts worth persisting to the
+// memory store. planSummary must stay in alignment with the schema in
+// schemas/plan_summary.json.
+type planSummary struct {
+	Response string         `json:"response"`
+	Memories []memoryRecord `json:"memories"`
+}
+
+// memoryRecord is a single key/value memory identified by the summarizer as
+// worth remembering across future sessions.
+type memoryRecord struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// parsePlanSummary parses the summarizer agent's raw response into a
+// planSummary, tolerating a response wrapped in a markdown JSON code fence.
+func parsePlanSummary(raw string) (planSummary, error) {
+	var summary planSummary
+
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimSuffix(raw, "```")
+
+	err := json.Unmarshal([]byte(raw), &summary)
+	if err != nil {
+		return summary, fmt.Errorf("could not parsePlanSummary: %v", err)
+	}
+
+	return summary, nil
+}
+
+// SummarizePlanResults provides a brief summary of the plan results and
+// persists any memories the summarizer identified as worth remembering
+// across future sessions.
 func SummarizePlanResults(provider anyllm.Provider, planResult string) string {
-	return Chat(provider, planSummarizerAgentName, planResult, "")
+	raw := Chat(provider, planSummarizerAgentName, planResult, "")
+
+	summary, err := parsePlanSummary(raw)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to parse plan summary")
+		return raw
+	}
+
+	for _, record := range summary.Memories {
+		if record.Key == "" {
+			continue
+		}
+
+		if err := storeMemory(record.Key, record.Value); err != nil {
+			log.Error().Err(err).Str("key", record.Key).Msg("could not store memory")
+		}
+	}
+
+	return summary.Response
 }
 
 // AppendContext adds a new result to the accumulated plan context,

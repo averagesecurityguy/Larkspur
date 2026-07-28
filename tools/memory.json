@@ -1,0 +1,65 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "description": "memory_search is used to find previously stored memories whose key or value contains the given query, case-insensitively. Use it to discover what memories already exist before fetching one with memory_get. An empty query returns every stored memory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Text to search for within memory keys and values. Leave empty to list every stored memory."
+            }
+          },
+          "required": ["query"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "memory_get",
+        "description": "memory_get is used to retrieve the value of a previously stored memory by its exact key.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "The exact key of the memory to retrieve."
+            }
+          },
+          "required": ["key"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "memory_put",
+        "description": "memory_put is used to store a memory under a key so it can be retrieved in future sessions. Storing a value under an existing key overwrites it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "A short, stable key under which to store the memory."
+            },
+            "value": {
+              "type": "string",
+              "description": "The value to store, written so it is understandable without any other context."
+            }
+          },
+          "required": ["key", "value"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    }
+  ]
+}

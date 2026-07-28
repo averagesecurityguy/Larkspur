@@ -1,0 +1,34 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/averagesecurityguy/larkspur/schemas/plan_summary.json",
+    "title": "PlanSummary",
+    "description": "Larkspur plan summary schema",
+    "type": "object",
+    "properties": {
+        "response": {
+            "type": "string",
+            "description": "A brief but accurate summary of the work completed during execution of the plan."
+        },
+        "memories": {
+            "type": "array",
+            "description": "Durable facts, learned while completing the plan, that are worth remembering in future sessions.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "A short, stable identifier for this memory."
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The fact to remember, written so it is understandable without any other context."
+                    }
+                },
+                "required": ["key", "value"],
+                "additionalProperties": false
+            }
+        }
+    },
+    "required": ["response", "memories"],
+    "additionalProperties": false
+}

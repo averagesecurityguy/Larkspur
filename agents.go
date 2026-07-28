@@ -23,6 +23,9 @@ var (
 	// Plan Schema
 	agentPlanSchema = loadContent("schemas/agent_plan.json")
 
+	// Plan Summary Schema
+	planSummarySchema = loadContent("schemas/plan_summary.json")
+
 	// Various agents
 	developerAgentName = "developer"
 	developerAgent     = &agent{
@@ -64,9 +67,10 @@ var (
 	}
 
 	planSummarizerAgentName = "summarizer"
+	planSummarizerSystem    = loadContent("prompts/plan_summarizer.md")
 	planSummarizerAgent     = &agent{
 		model:     "gemma4:e2b",
-		system:    loadContent("prompts/plan_summarizer.md"),
+		system:    fmt.Sprintf("%s\n%s\n", planSummarizerSystem, planSummarySchema),
 		temp:      0.4,
 		topP:      0.9,
 		reasoning: anyllm.ReasoningEffortLow,

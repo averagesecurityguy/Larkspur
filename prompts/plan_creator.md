@@ -31,7 +31,11 @@ The agent you choose will both perform the `objective` and verify every `checkli
 
 ### Available tools
 
-Agents can only verify what their tools can check. They have tools to run a single shell command, and to write, read, and inspect the size of files, and to find files or directories by glob pattern. Do not write checklist items that require judgment, opinion, or anything outside of running a command or inspecting a file.
+Agents can only verify what their tools can check. They have tools to run a single shell command, to write, read, and inspect the size of files, to find files or directories by glob pattern, and to search, read, and write memories left over from past sessions. Do not write checklist items that require judgment, opinion, or anything outside of running a command, inspecting a file, or reading a memory.
+
+## Using memory
+
+Before writing the plan, use `memory_search` to check whether anything relevant to the client's request was already learned in a previous session — a decision, a convention, a constraint, a preference. If you find something relevant, fold it into the `objective` so the executing agent doesn't have to rediscover it. Do not invent a memory search result; only act on what `memory_search` actually returns.
 
 ## Writing the checklist
 

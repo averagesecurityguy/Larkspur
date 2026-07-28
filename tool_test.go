@@ -55,6 +55,9 @@ func testLoadAllTools(t *testing.T) {
 		"file_size_bytes",
 		"file_size_lines",
 		"file_find_glob",
+		"memory_search",
+		"memory_get",
+		"memory_put",
 	}
 	tools := loadAllTools()
 	names := []string{}

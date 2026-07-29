@@ -48,7 +48,7 @@ func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error
 
 	userPrompt = fmt.Sprintf("Please create a plan to meet the following objective: %s\n", userPrompt)
 
-	planStr := Chat(provider, planCreatorAgentName, userPrompt, "", "")
+	planStr := Chat(provider, planCreatorAgentName, userPrompt, "", "", true)
 
 	planStr = strings.TrimPrefix(planStr, "```json")
 	planStr = strings.TrimSuffix(planStr, "```")
@@ -107,7 +107,7 @@ func parsePlanSummary(raw string) (planSummary, error) {
 func SummarizePlanResults(provider anyllm.Provider, planResult, planID string) string {
 	defer clearCheckpoint(planID)
 
-	raw := Chat(provider, planSummarizerAgentName, planResult, "", planID)
+	raw := Chat(provider, planSummarizerAgentName, planResult, "", planID, false)
 
 	summary, err := parsePlanSummary(raw)
 	if err != nil {
@@ -142,7 +142,7 @@ func AppendContext(provider anyllm.Provider, context, result string) string {
 		return combined
 	}
 
-	compacted := Chat(provider, contextCompactorAgentName, combined, "", "")
+	compacted := Chat(provider, contextCompactorAgentName, combined, "", "", false)
 
 	log.Debug().
 		Int("before", len(combined)).

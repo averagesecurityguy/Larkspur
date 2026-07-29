@@ -110,16 +110,19 @@ func main() {
 
 			fmt.Printf("---- PLAN ----\n%s\n---- END PLAN ----\n", plan)
 
-			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc, plan.PlanID)
+			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc, plan.PlanID, true)
 			oc = larkspur.AppendContext(provider, oc, result)
 
-			// Verify our plan one check at a time.
+			// Verify our plan one check at a time. The verification itself
+			// runs quietly (verbose=false) since the user only needs to know
+			// each check completed, not the tool calls or reasoning behind
+			// it.
 			for i, check := range plan.Checklist {
-				fmt.Printf("Checking %d of %d: %s\n", i+1, len(plan.Checklist), check)
+				fmt.Printf("Checking %d of %d: %s ... ", i+1, len(plan.Checklist), check)
 
 				prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
-				result := larkspur.Chat(provider, plan.Agent, prompt, oc, plan.PlanID)
-				fmt.Printf("-> %s\n", result)
+				result := larkspur.Chat(provider, plan.Agent, prompt, oc, plan.PlanID, false)
+				fmt.Printf("✓\n")
 
 				oc = larkspur.AppendContext(provider, oc, result)
 			}

@@ -40,9 +40,12 @@ const (
 // itself what to do next across a history compaction and across the
 // separate Chat calls that make up a single plan (the objective, then each
 // checklist item). Pass "" when no plan is in progress, e.g. plan creation
-// itself or the compactor's own summarization calls. The final response is
-// returned once the loop finishes.
-func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID string) string {
+// itself or the compactor's own summarization calls. verbose controls
+// whether each tool call is printed as it happens; callers that only need
+// the final response, such as checklist verification, should pass false to
+// keep that detail out of the user's view. The final response is returned
+// once the loop finishes.
+func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID string, verbose bool) string {
 	var final string
 
 	// Get the agent information from the agent name. This includes the model,
@@ -137,11 +140,13 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 					Str("arguments", tc.Function.Arguments).
 					Msg(result)
 
-				snippet := result
-				if len(snippet) > maxSnippet {
-					snippet = snippet[:maxSnippet]
+				if verbose {
+					snippet := result
+					if len(snippet) > maxSnippet {
+						snippet = snippet[:maxSnippet]
+					}
+					fmt.Printf("[%s] %s\n%s\n", agentName, tc.Function.Name, snippet)
 				}
-				fmt.Printf("[%s] %s\n%s\n", agentName, tc.Function.Name, snippet)
 
 				// Add the tool result to the conversation.
 				messages = append(messages, anyllm.Message{
@@ -216,7 +221,7 @@ func compactHistory(provider anyllm.Provider, messages []anyllm.Message, leading
 		fmt.Fprintf(&history, "%s: %s\n", m.Role, contentStr(m.Content))
 	}
 
-	summary := Chat(provider, contextCompactorAgentName, history.String(), "", "")
+	summary := Chat(provider, contextCompactorAgentName, history.String(), "", "", false)
 
 	log.Debug().
 		Int("before", messagesSize(messages)).

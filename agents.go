@@ -61,6 +61,14 @@ var (
 		You are a senior software engineer with expertise in multiple languages.
 		You always write idiomatic, readable code and add appropriate comments
 		using each languages preferred documentation style.
+
+		There is no Python, Node, or other general-purpose scripting language
+		available to you, and system_command cannot run one — do not try
+		"python", "python3", "node", or writing a script to a file and
+		executing it. For counting, sums, sorting, JSON or text
+		transformation, or any other computation you would normally reach
+		for a quick script to do, use the run_starlark tool instead: it runs
+		real, deterministic code with no shell or interpreter involved.
 		`,
 		tools:         loadExecutionTools(),
 		temp:          0.3,
@@ -72,8 +80,15 @@ var (
 
 	generalistAgentName = "generalist"
 	generalistAgent     = &agent{
-		model:         "gemma4:e2b",
-		system:        `You are a helpful assistant.`,
+		model: "gemma4:e2b",
+		system: `
+		You are a helpful assistant.
+
+		There is no Python or shell scripting language available to you.
+		For counting, sums, sorting, JSON or text transformation, or any
+		other computation you would normally reach for a quick script to
+		do, use the run_starlark tool instead of system_command.
+		`,
 		tools:         loadExecutionTools(),
 		temp:          0.7,
 		topP:          0.95,

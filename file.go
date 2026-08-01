@@ -32,6 +32,26 @@ type fileReadLinesArgs struct {
 	Stop  int `json:"stop_line"`
 }
 
+type fileEditArgs struct {
+	fileReadFullArgs
+	OldString  string `json:"old_string"`
+	NewString  string `json:"new_string"`
+	ReplaceAll bool   `json:"replace_all"`
+}
+
+type dirCreateArgs struct {
+	Path string `json:"path"`
+}
+
+type fileMoveArgs struct {
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+}
+
+type dirListArgs struct {
+	Path string `json:"path"`
+}
+
 // fileWriteFull writes the given content to the given filename.
 func fileWriteFull(arguments string) string {
 	var args fileWriteFullArgs
@@ -236,4 +256,216 @@ func fileFindGlob(arguments string) string {
 	}
 
 	return strings.Join(matches, "\n")
+}
+
+// fileEdit replaces old_string with new_string in the given file. Unless
+// replace_all is set, old_string must match exactly once in the file — this
+// forces the caller to include enough surrounding context to pin down a
+// single location, the same way it would need to for the edit to be
+// unambiguous to a human reader, rather than silently guessing which
+// occurrence was meant.
+func fileEdit(arguments string) string {
+	var args fileEditArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("file_edit: error: %v", err)
+	}
+
+	if args.Name == "" {
+		log.Error().Msg("missing file name")
+		return fmt.Sprintf("file_edit: error: missing file name")
+	}
+
+	if args.OldString == "" {
+		log.Error().Msg("missing old_string")
+		return fmt.Sprintf("file_edit: error: missing old_string")
+	}
+
+	if args.OldString == args.NewString {
+		log.Error().Msg("old_string and new_string are identical")
+		return fmt.Sprintf("file_edit: error: old_string and new_string are identical")
+	}
+
+	path := filepath.Clean(args.Name)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Error().Err(err).Msg("could not read file")
+		return fmt.Sprintf("file_edit: error: could not read file")
+	}
+
+	content := string(data)
+	count := strings.Count(content, args.OldString)
+
+	if count == 0 {
+		log.Error().Msg("old_string not found")
+		return fmt.Sprintf("file_edit: error: old_string not found in file")
+	}
+
+	if count > 1 && !args.ReplaceAll {
+		return fmt.Sprintf(
+			"file_edit: error: old_string appears %d times in the file; "+
+				"set replace_all to true to replace every occurrence, "+
+				"or include more surrounding context so old_string matches only one location",
+			count,
+		)
+	}
+
+	limit := 1
+	if args.ReplaceAll {
+		limit = -1
+	}
+
+	updated := strings.Replace(content, args.OldString, args.NewString, limit)
+
+	err = os.WriteFile(path, []byte(updated), 0644)
+	if err != nil {
+		log.Error().Err(err).Msg("could not write file")
+		return fmt.Sprintf("file_edit: error: could not write file")
+	}
+
+	if args.ReplaceAll {
+		return fmt.Sprintf("file_edit: success (replaced %d occurrences)", count)
+	}
+
+	return "file_edit: success"
+}
+
+// fileDelete removes the given file. It refuses to remove a directory —
+// deleting a whole directory tree is a much larger, harder to undo action
+// than deleting one file, and isn't something this tool takes on.
+func fileDelete(arguments string) string {
+	var args fileReadFullArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("file_delete: error: %v", err)
+	}
+
+	if args.Name == "" {
+		log.Error().Msg("missing file name")
+		return fmt.Sprintf("file_delete: error: missing file name")
+	}
+
+	path := filepath.Clean(args.Name)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		log.Error().Err(err).Msg("could not stat file")
+		return fmt.Sprintf("file_delete: error: could not find file")
+	}
+
+	if info.IsDir() {
+		log.Error().Msg("refusing to delete a directory")
+		return fmt.Sprintf("file_delete: error: %s is a directory, not a file", path)
+	}
+
+	if err := os.Remove(path); err != nil {
+		log.Error().Err(err).Msg("could not delete file")
+		return fmt.Sprintf("file_delete: error: could not delete file")
+	}
+
+	return "file_delete: success"
+}
+
+// dirCreate creates the given directory, along with any missing parent
+// directories, the same way "mkdir -p" does. It is a no-op, not an error,
+// if the directory already exists.
+func dirCreate(arguments string) string {
+	var args dirCreateArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("dir_create: error: %v", err)
+	}
+
+	if args.Path == "" {
+		log.Error().Msg("missing path")
+		return fmt.Sprintf("dir_create: error: missing path")
+	}
+
+	if err := os.MkdirAll(filepath.Clean(args.Path), 0755); err != nil {
+		log.Error().Err(err).Msg("could not create directory")
+		return fmt.Sprintf("dir_create: error: could not create directory")
+	}
+
+	return "dir_create: success"
+}
+
+// fileMove moves or renames source to destination. It works for both files
+// and directories, but does not create destination's parent directory —
+// use dir_create first if it doesn't exist yet.
+func fileMove(arguments string) string {
+	var args fileMoveArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("file_move: error: %v", err)
+	}
+
+	if args.Source == "" || args.Destination == "" {
+		log.Error().Msg("missing source or destination")
+		return fmt.Sprintf("file_move: error: missing source or destination")
+	}
+
+	src := filepath.Clean(args.Source)
+	dst := filepath.Clean(args.Destination)
+
+	if err := os.Rename(src, dst); err != nil {
+		log.Error().Err(err).Msg("could not move file")
+		return fmt.Sprintf("file_move: error: could not move %s to %s", src, dst)
+	}
+
+	return "file_move: success"
+}
+
+// dirList lists the immediate contents of a directory (not recursive; use
+// file_find_glob for recursive matching), one entry per line as
+// "type\tsize\tname". size is "-" for directories.
+func dirList(arguments string) string {
+	var args dirListArgs
+
+	err := json.Unmarshal([]byte(arguments), &args)
+	if err != nil {
+		log.Error().Err(err).Msg("could not parse arguments")
+		return fmt.Sprintf("dir_list: error: %v", err)
+	}
+
+	path := args.Path
+	if path == "" {
+		path = "."
+	}
+
+	entries, err := os.ReadDir(filepath.Clean(path))
+	if err != nil {
+		log.Error().Err(err).Msg("could not read directory")
+		return fmt.Sprintf("dir_list: error: could not read directory")
+	}
+
+	if len(entries) == 0 {
+		return "<empty directory>"
+	}
+
+	var result strings.Builder
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			fmt.Fprintf(&result, "dir\t-\t%s\n", entry.Name())
+			continue
+		}
+
+		size := "?"
+		if info, err := entry.Info(); err == nil {
+			size = fmt.Sprintf("%d", info.Size())
+		}
+
+		fmt.Fprintf(&result, "file\t%s\t%s\n", size, entry.Name())
+	}
+
+	return strings.TrimSuffix(result.String(), "\n")
 }

@@ -31,7 +31,7 @@ The agent you choose performs the `objective`; a separate verifier checks the `c
 
 ### Available tools
 
-Agents can only verify what their tools can check. They have tools to run a single shell command, to write, read, and inspect the size of files, to find files or directories by glob pattern, and to search, read, and write memories left over from past sessions. Do not write checklist items that require judgment, opinion, or anything outside of running a command, inspecting a file, or reading a memory.
+Agents can only verify what their tools can check. They have tools to write, read, edit, move, and delete files and directories; to find files by glob pattern or search file content by pattern; to run a fixed set of build, lint, and vet commands (not a general shell, and not Python or any other scripting language); to run a Starlark script for exact counts, sums, or other computation; and to search, read, and write memories left over from past sessions. Do not write checklist items that require judgment, opinion, or anything outside of what these tools can check.
 
 ## Using memory
 

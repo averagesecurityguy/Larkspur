@@ -8,6 +8,7 @@ require (
 	github.com/ollama/ollama v0.17.6
 	github.com/rs/zerolog v1.35.1
 	go.etcd.io/bbolt v1.5.0
+	go.starlark.net v0.0.0-20260708150628-5395d018f003
 )
 
 require (

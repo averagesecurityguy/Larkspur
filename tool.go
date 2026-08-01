@@ -33,6 +33,12 @@ func executeTool(a *agent, name, arguments string) string {
 	switch name {
 	case "system_command":
 		result = systemCommand(arguments)
+	case "dir_current":
+		result = dirCurrent(arguments)
+	case "find_executable":
+		result = findExecutable(arguments)
+	case "run_starlark":
+		result = runStarlark(arguments)
 	case "file_write_full":
 		result = fileWriteFull(arguments)
 	case "file_read_full":
@@ -45,6 +51,18 @@ func executeTool(a *agent, name, arguments string) string {
 		result = fileSizeLines(arguments)
 	case "file_find_glob":
 		result = fileFindGlob(arguments)
+	case "file_edit":
+		result = fileEdit(arguments)
+	case "file_delete":
+		result = fileDelete(arguments)
+	case "file_move":
+		result = fileMove(arguments)
+	case "dir_create":
+		result = dirCreate(arguments)
+	case "dir_list":
+		result = dirList(arguments)
+	case "grep_files":
+		result = grepFiles(arguments)
 	case "memory_search":
 		result = memorySearch(arguments)
 	case "memory_get":
@@ -116,6 +134,11 @@ func loadAllTools() []anyllm.Tool {
 
 	// Load the memory tools
 	for _, tool := range loadTools(filepath.Join(".", "tools", "memory.json")) {
+		all = append(all, tool)
+	}
+
+	// Load the scripting tools
+	for _, tool := range loadTools(filepath.Join(".", "tools", "script.json")) {
 		all = append(all, tool)
 	}
 

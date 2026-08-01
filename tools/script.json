@@ -1,0 +1,27 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "run_starlark",
+        "description": "Run a Starlark script for computation — sorting, counting, arithmetic, JSON/text transformation, and similar tasks you'd otherwise reach for python -c or a throwaway script for. Starlark is a deterministic, Python-like language (used by Bazel) with no built-in access to the filesystem, network, or other programs, so it is safe to run directly: there is no python or general scripting available, and this is the tool to use instead. The script cannot read files itself — pass any data it needs through \"inputs\" (read the file first with a file tool), and it cannot write files either — return data through \"result\" and write it out yourself with file_write_full if needed. Two modules are predeclared: json (json.encode(x), json.decode(s)) and math (math.sqrt, math.floor, math.pow, etc.); everything else is standard Starlark (lists, dicts, string methods, len, range, sorted, comprehensions). Set a global variable named result to whatever value you want returned — it is JSON-encoded automatically; print() output is also captured and included. Execution is capped at a few seconds and a large but finite number of steps, so infinite loops fail cleanly instead of hanging.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "script": {
+              "type": "string",
+              "description": "Starlark source to execute. Set a `result` variable to return a value, e.g. \"result = sorted(inputs['items'])\"."
+            },
+            "inputs": {
+              "type": "object",
+              "description": "Named values to expose to the script as the `inputs` dict, e.g. {\"text\": \"...\"} becomes inputs[\"text\"] in the script. Omit if the script needs no input data."
+            }
+          },
+          "required": ["script"],
+          "additionalProperties": false
+        },
+        "strict": false
+      }
+    }
+  ]
+}

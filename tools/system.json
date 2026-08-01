@@ -4,16 +4,48 @@
       "type": "function",
       "function": {
         "name": "system_command",
-        "description": "Execute a shell command.",
+        "description": "Run one command from a fixed allow-list. Do NOT use this to read, write, list, or search files, to get the current directory, or to find an executable — use file_read_full, file_read_lines, file_write_full, dir_list, file_find_glob, grep_files, dir_current, or find_executable instead; they are more reliable and this tool cannot do those things (cat, head, tail, ls, find, grep, pwd, and which are not available here). What this tool is for: running a build/lint/vet tool for the project's language: gofmt, golangci-lint, go build, go vet, go fmt (Go); cargo build, cargo check, cargo clippy, cargo fmt (Rust); tsc, eslint, prettier (JS/TS); javac (Java); gcc, clang, cppcheck, clang-tidy (C/C++); flake8, pylint, ruff, mypy (Python); or ps for process inspection. go and cargo only work with those exact subcommands — go run, cargo install, and similar are not allowed. This is not a full shell — the only supported operator is && to chain commands (each one only runs if the previous one succeeded, same as a shell). There is no piping, redirection, ;, ||, command substitution, or backgrounding: anything else after a command name is passed to it literally, so operators like | or > will not work and will just be treated as plain text arguments.",
         "parameters": {
           "type": "object",
           "properties": {
             "command": {
               "type": "string",
-              "description": "The shell command to execute."
+              "description": "One command and its arguments, or several joined by &&, e.g. \"go build ./... && go vet ./...\". No other shell operators."
             }
           }
         }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "dir_current",
+        "description": "dir_current returns the current working directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "find_executable",
+        "description": "find_executable looks up the full path of an executable program by name, searching the same locations a shell would use. Returns an error if no such executable is found.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the executable to look up, e.g. \"go\" or \"python3\"."
+            }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        },
+        "strict": true
       }
     }
   ]

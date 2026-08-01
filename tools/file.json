@@ -125,6 +125,147 @@
         "additionalProperties": false
       },
       "strict": true
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_edit",
+        "description": "file_edit replaces old_string with new_string in a file, without needing to rewrite the whole file. Unless replace_all is set, old_string must match exactly one place in the file, so include enough surrounding lines or context to make it unique — if it matches more than once, the call fails and tells you how many times it matched instead of guessing which one you meant.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_name": {
+              "type": "string",
+              "description": "The name of the file to edit."
+            },
+            "old_string": {
+              "type": "string",
+              "description": "The exact text to find and replace. Must match the file's content exactly, including whitespace."
+            },
+            "new_string": {
+              "type": "string",
+              "description": "The text to replace old_string with."
+            },
+            "replace_all": {
+              "type": "boolean",
+              "description": "If true, replace every occurrence of old_string instead of requiring exactly one match. Defaults to false."
+            }
+          },
+          "required": ["file_name", "old_string", "new_string"],
+          "additionalProperties": false
+        },
+        "strict": false
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_delete",
+        "description": "file_delete removes a single file. It refuses to delete a directory.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_name": {
+              "type": "string",
+              "description": "The name of the file to delete."
+            }
+          },
+          "required": ["file_name"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "file_move",
+        "description": "file_move moves or renames a file or directory from source to destination. It does not create destination's parent directory — use dir_create first if it doesn't exist yet.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "The current path of the file or directory."
+            },
+            "destination": {
+              "type": "string",
+              "description": "The new path for the file or directory."
+            }
+          },
+          "required": ["source", "destination"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "dir_create",
+        "description": "dir_create creates a directory, along with any missing parent directories (like \"mkdir -p\"). It is not an error if the directory already exists.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The directory path to create."
+            }
+          },
+          "required": ["path"],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "dir_list",
+        "description": "dir_list lists the immediate contents of a directory (not recursive — use file_find_glob or grep_files to search recursively), one entry per line as \"type<TAB>size<TAB>name\".",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "The directory to list. Defaults to the current directory if omitted."
+            }
+          },
+          "additionalProperties": false
+        },
+        "strict": false
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "grep_files",
+        "description": "grep_files searches files under a directory tree for lines matching a regular expression, returning \"file:line: text\" per match. Use this to find where something is used or defined across a codebase, instead of reading whole files one at a time. .git directories are always skipped.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": "A regular expression to search for (RE2 syntax, the same as Go's regexp package)."
+            },
+            "path": {
+              "type": "string",
+              "description": "The directory to search recursively. Defaults to the current directory if omitted."
+            },
+            "glob": {
+              "type": "string",
+              "description": "Restrict the search to files whose name matches this glob pattern, e.g. \"*.go\". Searches all files if omitted."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of matches to return. Defaults to 200 if omitted."
+            }
+          },
+          "required": ["pattern"],
+          "additionalProperties": false
+        },
+        "strict": false
+      }
     }
   ]
 }

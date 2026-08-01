@@ -7,6 +7,7 @@ package larkspur
 // and the agentPlan struct must stay in alignment.
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -19,15 +20,30 @@ import (
 const (
 	maxAttempts = 5
 
-	// contextAppendThreshold is the character size at which the accumulated
-	// plan context is summarized by the compactor agent before the next
-	// result is appended. It's kept well below compactThreshold (chat.go)
-	// on purpose: this accumulated context becomes the seed for a fresh
-	// Chat call's message history, so if it were allowed to grow as large
-	// as compactThreshold by itself, that call's own ReAct loop would have
-	// no headroom left before needing to compact again.
-	contextAppendThreshold = compactThreshold / 2
+	planPrompt = "Given the context, please create a plan to meet the following objective: %s\n"
+
+	// maxOuterContextTokens is a hardcoded ceiling on the outer loop's
+	// accumulated plan context (appendContext, below), independent of any
+	// single agent's own contextTokens. Without it, a long-running plan
+	// with many checklist items could grow that context so large that
+	// every remaining chat() call has to immediately compact its incoming
+	// promptContext (chat.go) just to get started — burning a
+	// summarization call on every single turn instead of only
+	// occasionally. Many current models cap out around 256K tokens, so
+	// this is sized well under that on purpose: it's a safety valve, not a
+	// target to fill.
+	maxOuterContextTokens = 256000
 )
+
+// contextAppendThreshold is the character size at which the accumulated
+// plan context is summarized by the compactor agent before the next result
+// is appended. Sized off maxOuterContextTokens rather than any specific
+// agent's own window, since the outer loop doesn't know in advance which
+// agent will consume this context next (the objective agent, then the
+// verifier, then the summarizer).
+func contextAppendThreshold() int {
+	return charBudget(maxOuterContextTokens)
+}
 
 // agentPlan holds a single plan that is used to accomplish one user goal. The
 // agentPlan struct must stay in alignment with the schema in
@@ -42,14 +58,15 @@ type agentPlan struct {
 	Checklist []string `json:"checklist"`
 }
 
-// GeneratePlan creates and verifies a plan based on a user prompt.
-func GeneratePlan(provider anyllm.Provider, userPrompt string) (agentPlan, error) {
+// generatePlan creates and verifies a plan based on a user prompt. ctx
+// bounds every completion call made along the way (see chat.go).
+func generatePlan(ctx context.Context, provider anyllm.Provider, userPrompt, context string) (agentPlan, error) {
 	var plan agentPlan
 
-	userPrompt = fmt.Sprintf("Please create a plan to meet the following objective: %s\n", userPrompt)
+	userPrompt = fmt.Sprintf(planPrompt, userPrompt)
+	planStr := chat(ctx, provider, planCreatorAgentName, userPrompt, context, "", true)
 
-	planStr := Chat(provider, planCreatorAgentName, userPrompt, "", "", true)
-
+	// Trim any JSON markdown fencing
 	planStr = strings.TrimPrefix(planStr, "```json")
 	planStr = strings.TrimSuffix(planStr, "```")
 
@@ -104,10 +121,10 @@ func parsePlanSummary(raw string) (planSummary, error) {
 // persists any memories the summarizer identified as worth remembering
 // across future sessions, and clears planID's checkpoint now that the plan
 // is finished.
-func SummarizePlanResults(provider anyllm.Provider, planResult, planID string) string {
+func summarizePlanResults(ctx context.Context, provider anyllm.Provider, planResult, planID string) string {
 	defer clearCheckpoint(planID)
 
-	raw := Chat(provider, planSummarizerAgentName, planResult, "", planID, false)
+	raw := chat(ctx, provider, planSummarizerAgentName, planResult, "", planID, false)
 
 	summary, err := parsePlanSummary(raw)
 	if err != nil {
@@ -128,21 +145,35 @@ func SummarizePlanResults(provider anyllm.Provider, planResult, planID string) s
 	return summary.Response
 }
 
-// AppendContext adds a new result to the accumulated plan context,
+// VerifyCheck asks the dedicated verifier agent to confirm a single
+// checklist item against promptContext, the accumulated record of completed
+// work. It runs quietly (no per-tool-call output) and without a planID,
+// since each checklist item is an independent, stateless check — unlike the
+// objective execution it follows, it has no "next step" of its own for a
+// checkpoint to carry forward.
+func verifyCheck(ctx context.Context, provider anyllm.Provider, check, promptContext string) string {
+	prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
+	return chat(ctx, provider, planVerifierAgentName, prompt, promptContext, "", false)
+}
+
+// appendContext adds a new result to the accumulated plan context,
 // compacting the combined context with the compactor agent whenever it
-// grows past contextAppendThreshold so a plan with many checklist items
-// doesn't grow the context handed to every remaining step without bound.
-func AppendContext(provider anyllm.Provider, context, result string) string {
+// grows past contextAppendThreshold so a long-running plan with many
+// checklist items doesn't grow the context handed to every remaining step
+// without bound. This is a coarse, agent-agnostic ceiling — chat.go still
+// does its own, tighter compaction of promptContext against whichever
+// specific agent is about to consume it.
+func appendContext(ctx context.Context, provider anyllm.Provider, context, result string) string {
 	combined := result
 	if context != "" {
 		combined = fmt.Sprintf("%s\n%s", context, result)
 	}
 
-	if len(combined) <= contextAppendThreshold {
+	if len(combined) <= contextAppendThreshold() {
 		return combined
 	}
 
-	compacted := Chat(provider, contextCompactorAgentName, combined, "", "", false)
+	compacted := chat(ctx, provider, contextCompactorAgentName, combined, "", "", false)
 
 	log.Debug().
 		Int("before", len(combined)).

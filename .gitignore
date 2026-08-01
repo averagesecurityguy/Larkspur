@@ -8,7 +8,7 @@
 larkspur
 
 # Logs
-larkspur.log
+*.log
 
 # Binaries for programs and plugins
 *.exe

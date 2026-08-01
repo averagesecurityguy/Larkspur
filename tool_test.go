@@ -109,16 +109,19 @@ func testLoadExecutionTools(t *testing.T) {
 func testTruncateToolOutput(t *testing.T) {
 	fmt.Println(t.Name())
 
+	testAgent := &agent{contextTokens: defaultModelContextTokens}
+
 	short := "short output"
-	if got := truncateToolOutput("test_tool", short); got != short {
+	if got := truncateToolOutput(testAgent, "test_tool", short); got != short {
 		t.Fatalf("Expected `%s`, received `%s`", short, got)
 	}
 
-	long := strings.Repeat("a", maxToolOutputChars+100)
-	got := truncateToolOutput("test_tool", long)
+	limit := testAgent.maxToolOutputChars()
+	long := strings.Repeat("a", limit+100)
+	got := truncateToolOutput(testAgent, "test_tool", long)
 
-	if !strings.HasPrefix(got, long[:maxToolOutputChars]) {
-		t.Fatalf("Expected truncated output to start with the first %d characters of the original", maxToolOutputChars)
+	if !strings.HasPrefix(got, long[:limit]) {
+		t.Fatalf("Expected truncated output to start with the first %d characters of the original", limit)
 	}
 
 	if !strings.Contains(got, "truncated") {

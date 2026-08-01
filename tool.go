@@ -15,15 +15,19 @@ type toolList struct {
 }
 
 // maxToolOutputChars caps how much of a single tool result is fed back into
-// the conversation. Derived from compactThreshold (chat.go) rather than its
-// own bare number, so it stays proportional if that budget is ever retuned:
-// an unbounded result (a large file, a verbose shell command) can otherwise
-// burn most of a single try's share of the budget and starve every turn
-// after it.
-const maxToolOutputChars = compactThreshold / 10
+// the conversation. Derived from a's own compactThreshold (chat.go) rather
+// than its own bare number, so it stays proportional if that budget is ever
+// retuned: an unbounded result (a large file, a verbose shell command) can
+// otherwise burn most of a single try's share of the budget and starve
+// every turn after it.
+func (a *agent) maxToolOutputChars() int {
+	return a.compactThreshold() / 10
+}
 
-// executeTool calls the appropriate function based on the tool name.
-func executeTool(name, arguments string) string {
+// executeTool calls the appropriate function based on the tool name. a is
+// the agent whose turn is currently running, used only to size the result
+// truncation below to its own budget.
+func executeTool(a *agent, name, arguments string) string {
 	var result string
 
 	switch name {
@@ -52,25 +56,26 @@ func executeTool(name, arguments string) string {
 		return fmt.Sprintf("error: unknown tool: %s", name)
 	}
 
-	return truncateToolOutput(name, result)
+	return truncateToolOutput(a, name, result)
 }
 
-// truncateToolOutput trims a tool result down to maxToolOutputChars so a
-// single call cannot dominate the shared context window.
-func truncateToolOutput(name, result string) string {
-	if len(result) <= maxToolOutputChars {
+// truncateToolOutput trims a tool result down to a's maxToolOutputChars so
+// a single call cannot dominate a's share of the shared context window.
+func truncateToolOutput(a *agent, name, result string) string {
+	limit := a.maxToolOutputChars()
+	if len(result) <= limit {
 		return result
 	}
 
 	log.Warn().
 		Str("tool", name).
 		Int("size", len(result)).
-		Int("limit", maxToolOutputChars).
+		Int("limit", limit).
 		Msg("tool output truncated")
 
 	return fmt.Sprintf(
 		"%s\n...output truncated at %d of %d characters. Use a more targeted tool call (e.g. file_read_lines) to see more.",
-		result[:maxToolOutputChars], maxToolOutputChars, len(result),
+		result[:limit], limit, len(result),
 	)
 }
 

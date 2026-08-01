@@ -1,6 +1,7 @@
 package larkspur
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -25,7 +26,7 @@ func TestPlanner(t *testing.T) {
 }
 
 // testAppendContext only exercises the concatenation path, below
-// contextAppendThreshold. The compaction path calls Chat with a live
+// contextAppendThreshold. The compaction path calls chat with a live
 // provider and is not covered here, matching the rest of the package: any
 // path that reaches the provider is untested.
 func testAppendContext(t *testing.T) {
@@ -37,7 +38,7 @@ func testAppendContext(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := AppendContext(nil, test.context, test.result)
+		got := appendContext(context.Background(), nil, test.context, test.result)
 		if got != test.expected {
 			t.Fatalf("Expected `%s`, received `%s`", test.expected, got)
 		}

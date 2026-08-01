@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -9,7 +10,6 @@ import (
 
 	"larkspur"
 	"larkspur/memory"
-	// "github.com/mozilla-ai/any-llm-go/providers/ollama"
 )
 
 var (
@@ -47,6 +47,8 @@ func main() {
 	var level string
 	var version bool
 	var logFileName string
+	var answer string
+	var larkContext string
 
 	flag.StringVar(&level, "level", "ERROR", "Set the logging level [ERROR, WARN, INFO, DEBUG]")
 	flag.BoolVar(&version, "v", false, "Display the product version.")
@@ -85,12 +87,18 @@ func main() {
 	// first line read from a single underlying read, silently losing lines
 	// (e.g. a piped "/quit") and leaving the loop spinning on EOF forever
 	// once stdin is exhausted.
-	reader := bufio.NewReader(os.Stdin)
+	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
 		fmt.Printf("User: ")
 
-		prompt, err := reader.ReadString('\n')
+		// Stop once stdin is exhausted (EOF) or unreadable, rather than
+		// spinning forever re-printing the prompt.
+		if !scanner.Scan() {
+			break
+		}
+
+		prompt := scanner.Text()
 		prompt = strings.TrimSuffix(prompt, "\n")
 
 		if shouldExit(prompt) {
@@ -98,43 +106,8 @@ func main() {
 		}
 
 		if prompt != "" {
-			// Keep track of our context
-			oc := ""
-
-			// Build a plan
-			plan, err := larkspur.GeneratePlan(provider, prompt)
-			if err != nil {
-				fmt.Printf("Agent ☹️: I was unable to create a plan: %v./n", err)
-				continue
-			}
-
-			fmt.Printf("---- PLAN ----\n%s\n---- END PLAN ----\n", plan)
-
-			result := larkspur.Chat(provider, plan.Agent, plan.Objective, oc, plan.PlanID, true)
-			oc = larkspur.AppendContext(provider, oc, result)
-
-			// Verify our plan one check at a time. The verification itself
-			// runs quietly (verbose=false) since the user only needs to know
-			// each check completed, not the tool calls or reasoning behind
-			// it.
-			for i, check := range plan.Checklist {
-				fmt.Printf("Checking %d of %d: %s ... ", i+1, len(plan.Checklist), check)
-
-				prompt := fmt.Sprintf("Verify the following has been completed: %s", check)
-				result := larkspur.Chat(provider, plan.Agent, prompt, oc, plan.PlanID, false)
-				fmt.Printf("✓\n")
-
-				oc = larkspur.AppendContext(provider, oc, result)
-			}
-
-			final := larkspur.SummarizePlanResults(provider, oc, plan.PlanID)
-			fmt.Printf("Agent 🥳: %s\n", final)
-		}
-
-		// Stop once stdin is exhausted (EOF) or unreadable, rather than
-		// spinning forever re-printing the prompt.
-		if err != nil {
-			break
+			answer, larkContext = larkspur.AnswerPrompt(context.Background(), provider, prompt, larkContext)
+			fmt.Printf("Lark: %s\n", answer)
 		}
 	}
 }

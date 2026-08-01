@@ -12,40 +12,50 @@ import (
 const (
 	maxSnippet = 100
 
-	// ollamaContextTokens mirrors the token budget the ollama provider
-	// hardcodes for every request (any-llm-go's providers/ollama/ollama.go,
-	// defaultNumCtx) regardless of what the underlying model supports.
-	ollamaContextTokens = 32000
-
 	// charsPerToken is a rough heuristic for English text and code (~4
-	// characters per token), used to translate the token budget above into
-	// the character counts we can actually measure without a real
-	// tokenizer for the model. Every char-based threshold below is sized
-	// off of this estimate rather than a bare number, so the relationship
-	// to the real, token-based limit stays visible.
+	// characters per token), used to translate a token budget into the
+	// character counts we can actually measure without a real tokenizer
+	// for the model. Every char-based threshold below is sized off of
+	// this estimate rather than a bare number, so the relationship to the
+	// real, token-based limit stays visible.
 	charsPerToken = 4
-
-	// compactThreshold is the total character size of the running message
-	// list at which older history is summarized by the compactor agent.
-	// That budget is shared across every try in the loop below, not just
-	// the current turn. Triggering at roughly half the estimated character
-	// budget leaves headroom for the tries and the final answer that
-	// follow, without compacting so early that most of the available
-	// context goes unused.
-	compactThreshold = ollamaContextTokens * charsPerToken / 2
 )
 
+// charBudget converts a token budget into the character threshold at which
+// accumulated content should be considered for compaction: charsPerToken
+// translates tokens to characters, and triggering at roughly half of that
+// leaves headroom for what follows rather than compacting right at the
+// edge.
+func charBudget(tokens int) int {
+	return tokens * charsPerToken / 2
+}
+
+// compactThreshold is the total character size of the running message list,
+// in a single chat() call, at which older history is summarized by the
+// compactor agent. Sized off this agent's own contextTokens rather than any
+// other agent's, since a chat() call only ever talks to this one model — an
+// agent with a larger window gets to use all of it, not whatever the
+// smallest-context agent in the system happens to support.
+func (a *agent) compactThreshold() int {
+	return charBudget(a.contextTokens)
+}
+
 // Chat executes a ReAct loop using the given provider, model, and prompt.
-// planID scopes the run to a plan's checkpoint, letting the agent remind
-// itself what to do next across a history compaction and across the
-// separate Chat calls that make up a single plan (the objective, then each
-// checklist item). Pass "" when no plan is in progress, e.g. plan creation
-// itself or the compactor's own summarization calls. verbose controls
-// whether each tool call is printed as it happens; callers that only need
-// the final response, such as checklist verification, should pass false to
-// keep that detail out of the user's view. The final response is returned
-// once the loop finishes.
-func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID string, verbose bool) string {
+// ctx bounds every completion call this makes, including the recursive
+// calls it makes into itself for compaction — callers that need a hard
+// ceiling on how long a single chat() call can run (e.g. a test against a
+// slow local model) should pass a context with a deadline; production
+// callers that don't need one can pass context.Background(). planID scopes
+// the run to a plan's checkpoint, letting the agent remind itself what to
+// do next across a history compaction and across the separate Chat calls
+// that make up a single plan (the objective, then each checklist item).
+// Pass "" when no plan is in progress, e.g. plan creation itself or the
+// compactor's own summarization calls. verbose controls whether each tool
+// call is printed as it happens; callers that only need the final
+// response, such as checklist verification, should pass false to keep that
+// detail out of the user's view. The final response is returned once the
+// loop finishes.
+func chat(ctx context.Context, provider anyllm.Provider, agentName, prompt, promptContext, planID string, verbose bool) string {
 	var final string
 
 	// Get the agent information from the agent name. This includes the model,
@@ -64,6 +74,20 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 	log.Debug().
 		Str("prompt", prompt).
 		Msg("chat prompt")
+
+	// promptContext is the outer loop's accumulated plan context
+	// (planner.go's appendContext), which now grows unbounded across a
+	// plan's checklist rather than being capped by the outer loop itself.
+	// It becomes part of this call's untouchable leading messages below, so
+	// if it's already large relative to this agent's own budget, compact it
+	// down now — otherwise it could blow past this agent's context window
+	// on the very first completion call, before the tries-based compaction
+	// below ever gets a chance to run. Capping it at half this agent's
+	// threshold leaves the other half for this call's own tool calls and
+	// responses.
+	if budget := agent.compactThreshold() / 2; len(promptContext) > budget {
+		promptContext = chat(ctx, provider, contextCompactorAgentName, promptContext, "", "", false)
+	}
 
 	messages := []anyllm.Message{
 		{Role: anyllm.RoleSystem, Content: agent.system},
@@ -88,8 +112,6 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 	// tool call to the message list.
 	tries := 0
 	for {
-		ctx := context.Background()
-
 		resp, err := provider.Completion(ctx, anyllm.CompletionParams{
 			Model:           agent.model,
 			Messages:        messages,
@@ -98,6 +120,7 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 			Temperature:     &agent.temp,
 			TopP:            &agent.topP,
 			ReasoningEffort: agent.reasoning,
+			ResponseFormat:  agent.responseFormat,
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("invalid chat response")
@@ -131,7 +154,7 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 				if tc.Function.Name == "task_checkpoint" {
 					result = taskCheckpoint(planID, tc.Function.Arguments)
 				} else {
-					result = executeTool(tc.Function.Name, tc.Function.Arguments)
+					result = executeTool(agent, tc.Function.Name, tc.Function.Arguments)
 					noteCheckpointAction(planID, tc.Function.Name, tc.Function.Arguments)
 				}
 
@@ -172,8 +195,8 @@ func Chat(provider anyllm.Provider, agentName, prompt, promptContext, planID str
 		// context window by summarizing older history once it grows past
 		// the threshold, rather than letting it grow unbounded across
 		// every remaining try.
-		if messagesSize(messages) > compactThreshold {
-			messages = compactHistory(provider, messages, leading, planID)
+		if messagesSize(messages) > agent.compactThreshold() {
+			messages = compactHistory(ctx, provider, messages, leading, planID)
 		}
 	}
 
@@ -210,7 +233,7 @@ func messagesSize(messages []anyllm.Message) int {
 // task purely from that summary. The leading messages are always preserved
 // untouched so the agent never loses its own instructions or task, only the
 // accumulated tool calls and intermediate responses that led up to now.
-func compactHistory(provider anyllm.Provider, messages []anyllm.Message, leading int, planID string) []anyllm.Message {
+func compactHistory(ctx context.Context, provider anyllm.Provider, messages []anyllm.Message, leading int, planID string) []anyllm.Message {
 	// Nothing to compact yet: only the leading messages are present.
 	if len(messages) <= leading {
 		return messages
@@ -221,7 +244,7 @@ func compactHistory(provider anyllm.Provider, messages []anyllm.Message, leading
 		fmt.Fprintf(&history, "%s: %s\n", m.Role, contentStr(m.Content))
 	}
 
-	summary := Chat(provider, contextCompactorAgentName, history.String(), "", "", false)
+	summary := chat(ctx, provider, contextCompactorAgentName, history.String(), "", "", false)
 
 	log.Debug().
 		Int("before", messagesSize(messages)).

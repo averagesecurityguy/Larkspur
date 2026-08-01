@@ -38,7 +38,9 @@ func configureLogger(level string, file *os.File) {
 	}
 
 	// Configure UTC time
-	zerolog.TimestampFunc = time.Now().UTC
+	zerolog.TimestampFunc = func() time.Time {
+    	return time.Now().UTC()
+	}
 
 	log.Logger = zerolog.New(file).With().Timestamp().Caller().Logger()
 }

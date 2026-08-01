@@ -1,0 +1,19 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/averagesecurityguy/larkspur/schemas/route.json",
+    "title": "RouteDecision",
+    "description": "Larkspur routing decision",
+    "type": "object",
+    "properties": {
+        "answer": {
+            "type": "string",
+            "description": "The answer to a user's request. This should be empty if a plan is needed."
+        },
+        "need_plan": {
+            "type": "boolean",
+            "description": "This should be true if a plan is needed and false otherwise."
+        }
+    },
+    "required": ["answer", "need_plan"],
+    "additionalProperties": false
+}

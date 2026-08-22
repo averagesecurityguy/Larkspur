@@ -2,17 +2,20 @@ package larkspur
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	ollamaapi "github.com/ollama/ollama/api"
 	"github.com/rs/zerolog/log"
 )
+
+//go:embed prompts/* schemas/* tools/*
+var assets embed.FS
 
 type agent struct {
 	model          string
@@ -56,7 +59,7 @@ var (
 	// Various agents
 	developerAgentName = "developer"
 	developerAgent     = &agent{
-		model: "gemma4:e2b",
+		model: "generalist",
 		system: `
 		You are a senior software engineer with expertise in multiple languages.
 		You always write idiomatic, readable code and add appropriate comments
@@ -80,7 +83,7 @@ var (
 
 	generalistAgentName = "generalist"
 	generalistAgent     = &agent{
-		model: "gemma4:e2b",
+		model: "generalist",
 		system: `
 		You are a helpful assistant.
 
@@ -108,7 +111,7 @@ var (
 		following schema:
 		`
 	routerAgent = &agent{
-		model:         "gemma4:e2b",
+		model:         "generalist",
 		system:        fmt.Sprintf("%s\n%s\n", routerSystem, routeSchema),
 		temp:          0.3,
 		topP:          0.9,
@@ -126,7 +129,7 @@ var (
 
 	contextCompactorAgentName = "compactor"
 	contextCompactorAgent     = &agent{
-		model: "gemma4:e2b",
+		model: "generalist",
 		system: `
 		You faithfully summarize the given content ensuring only the most valuable
 		information is kept. Your summaries will be read by other LLM agents.
@@ -141,7 +144,7 @@ var (
 	planSummarizerAgentName = "summarizer"
 	planSummarizerSystem    = loadContent("prompts/plan_summarizer.md")
 	planSummarizerAgent     = &agent{
-		model:         "gemma4:e2b",
+		model:         "generalist",
 		system:        fmt.Sprintf("%s\n%s\n", planSummarizerSystem, planSummarySchema),
 		temp:          0.4,
 		topP:          0.9,
@@ -160,7 +163,7 @@ var (
 	planCreatorAgentName = "creator"
 	planCreatorSystem    = loadContent("prompts/plan_creator.md")
 	planCreatorAgent     = &agent{
-		model:         "gemma4:e2b",
+		model:         "generalist",
 		system:        fmt.Sprintf("%s\n%s\n", planCreatorSystem, agentPlanSchema),
 		tools:         loadAllTools(),
 		temp:          0.2,
@@ -192,7 +195,7 @@ var (
 	planVerifierAgentName = "verifier"
 	planVerifierSystem    = loadContent("prompts/plan_verifier.md")
 	planVerifierAgent     = &agent{
-		model:         "gemma4:e2b",
+		model:         "generalist",
 		system:        planVerifierSystem,
 		tools:         loadAllTools(),
 		temp:          0.2,
@@ -288,7 +291,7 @@ func queryContextTokens(client *ollamaapi.Client, model string) (int, error) {
 
 // loadContent loads the content of the given path or exits on failure.
 func loadContent(path string) string {
-	data, err := os.ReadFile(filepath.Clean(path))
+	data, err := assets.ReadFile(filepath.Clean(path))
 	if err != nil {
 		log.Fatal().Err(err).Str("path", path).Msg("could not load prompt")
 	}
@@ -301,7 +304,7 @@ func loadContent(path string) string {
 func loadSchema(path string) map[string]any {
 	var schema map[string]any
 
-	data, err := os.ReadFile(filepath.Clean(path))
+	data, err := assets.ReadFile(filepath.Clean(path))
 	if err != nil {
 		log.Fatal().Err(err).Str("path", path).Msg("could not load schema")
 	}

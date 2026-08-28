@@ -1,0 +1,27 @@
+# Modelfile for "generalist", the single model tag every Larkspur agent
+# is configured to use (see the `model` field on each *agent value in
+# agents.go). Built on top of gemma4:e2b.
+#
+# Ollama serves a model with a runtime context window of 4096 tokens by
+# default, regardless of that model's own trained maximum, unless a
+# Modelfile (or an API caller) says otherwise. Left at Ollama's default,
+# larger prompts (e.g. prompts/plan_creator.md) can get silently
+# truncated mid-generation instead of ever tripping Larkspur's own
+# compaction.
+#
+# This Modelfile builds the generalist tag on top of gemma4:e2b with
+# num_ctx raised to 32768, the minimum context window Larkspur requires
+# (see minModelContextTokens in agents.go — RefreshAgentContextWindows
+# refuses to trust a model reporting less). Larkspur reads this same
+# value back from `ollama show generalist` to size its compaction
+# thresholds, so a change to num_ctx here takes effect there
+# automatically, as long as it stays at or above 32768. Apply it with:
+#
+#   ollama create generalist -f modelfiles/generalist.Modelfile
+#
+# then confirm with `ollama show generalist` (or `ollama ps` after a
+# request) that the context window reports 32768.
+
+FROM gemma4:e2b
+
+PARAMETER num_ctx 32768

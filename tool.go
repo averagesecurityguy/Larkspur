@@ -3,7 +3,6 @@ package larkspur
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
@@ -102,7 +101,7 @@ func truncateToolOutput(a *agent, name, result string) string {
 func loadTools(path string) []anyllm.Tool {
 	var tl toolList
 
-	data, err := os.ReadFile(path)
+	data, err := assets.ReadFile(filepath.Clean(path))
 	if err != nil {
 		log.Error().Err(err).Msg("could not load tools")
 		return []anyllm.Tool{}
@@ -123,22 +122,22 @@ func loadAllTools() []anyllm.Tool {
 	var all []anyllm.Tool
 
 	// Load the system tools
-	for _, tool := range loadTools(filepath.Join(".", "tools", "system.json")) {
+	for _, tool := range loadTools(filepath.Join("tools", "system.json")) {
 		all = append(all, tool)
 	}
 
 	// Load the file tools
-	for _, tool := range loadTools(filepath.Join(".", "tools", "file.json")) {
+	for _, tool := range loadTools(filepath.Join("tools", "file.json")) {
 		all = append(all, tool)
 	}
 
 	// Load the memory tools
-	for _, tool := range loadTools(filepath.Join(".", "tools", "memory.json")) {
+	for _, tool := range loadTools(filepath.Join("tools", "memory.json")) {
 		all = append(all, tool)
 	}
 
 	// Load the scripting tools
-	for _, tool := range loadTools(filepath.Join(".", "tools", "script.json")) {
+	for _, tool := range loadTools(filepath.Join("tools", "script.json")) {
 		all = append(all, tool)
 	}
 
@@ -153,7 +152,7 @@ func loadAllTools() []anyllm.Tool {
 func loadExecutionTools() []anyllm.Tool {
 	all := loadAllTools()
 
-	for _, tool := range loadTools(filepath.Join(".", "tools", "checkpoint.json")) {
+	for _, tool := range loadTools(filepath.Join("tools", "checkpoint.json")) {
 		all = append(all, tool)
 	}
 

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	ollamaapi "github.com/ollama/ollama/api"
@@ -226,10 +228,11 @@ var allAgents = []*agent{
 // (chat.go) reads its own contextTokens live on every call, so nothing else
 // needs recomputing once this returns.
 //
-// A model that can't be queried (not pulled yet, an older ollama without
-// model_info, an unexpected response shape) keeps its current contextTokens
-// rather than failing the whole call: a possibly-stale budget is better
-// than blocking startup over one agent's metadata.
+// A model that can't be queried (not pulled yet, no num_ctx set, a served
+// context window below minModelContextTokens, an unexpected response shape)
+// keeps its current contextTokens rather than failing the whole call: a
+// possibly-stale budget is better than blocking startup over one agent's
+// metadata.
 func RefreshAgentContextWindows(ollamaHost string) error {
 	parsed, err := url.Parse(ollamaHost)
 	if err != nil {
@@ -259,34 +262,57 @@ func RefreshAgentContextWindows(ollamaHost string) error {
 	return nil
 }
 
-// queryContextTokens asks ollama for model's trained context length via its
-// native /api/show endpoint. ModelInfo keys are namespaced by architecture
-// (e.g. "gemma3.context_length"), so general.architecture is read first to
-// build the right key.
+// minModelContextTokens is the smallest context window
+// RefreshAgentContextWindows will accept from a provider. A model reporting
+// less than this is treated as misconfigured rather than trusted, since
+// Larkspur's prompts (e.g. prompts/plan_creator.md) are sized assuming at
+// least this much room.
+const minModelContextTokens = 32768
+
+// queryContextTokens asks ollama, via its native /api/show endpoint, for the
+// context window it is actually serving model at — the num_ctx parameter
+// applied when the model was created (see modelfiles/generalist.Modelfile) —
+// rather than the model's trained maximum, since Ollama serves at num_ctx
+// (or a 4096 default when none is set) regardless of how large that trained
+// maximum is. Returns an error if num_ctx isn't set or falls below
+// minModelContextTokens.
 func queryContextTokens(client *ollamaapi.Client, model string) (int, error) {
 	resp, err := client.Show(context.Background(), &ollamaapi.ShowRequest{Model: model})
 	if err != nil {
 		return 0, fmt.Errorf("show %s: %w", model, err)
 	}
 
-	arch, _ := resp.ModelInfo["general.architecture"].(string)
-	if arch == "" {
-		return 0, fmt.Errorf("show %s: no general.architecture in model_info", model)
-	}
-
-	key := fmt.Sprintf("%s.context_length", arch)
-
-	raw, ok := resp.ModelInfo[key]
+	numCtx, ok := parseNumCtx(resp.Parameters)
 	if !ok {
-		return 0, fmt.Errorf("show %s: no %s in model_info", model, key)
+		return 0, fmt.Errorf("show %s: no num_ctx set", model)
 	}
 
-	tokens, ok := raw.(float64)
-	if !ok {
-		return 0, fmt.Errorf("show %s: %s is %T, not a number", model, key, raw)
+	if numCtx < minModelContextTokens {
+		return 0, fmt.Errorf("show %s: num_ctx %d is below the minimum %d Larkspur expects", model, numCtx, minModelContextTokens)
 	}
 
-	return int(tokens), nil
+	return numCtx, nil
+}
+
+// parseNumCtx looks for a num_ctx line in the raw parameter listing
+// ShowResponse.Parameters returns (one "key value" pair per line, key
+// left-padded), such as the one num_ctx PARAMETER in a Modelfile produces.
+func parseNumCtx(parameters string) (int, bool) {
+	for _, line := range strings.Split(parameters, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || fields[0] != "num_ctx" {
+			continue
+		}
+
+		numCtx, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return 0, false
+		}
+
+		return numCtx, true
+	}
+
+	return 0, false
 }
 
 // loadContent loads the content of the given path or exits on failure.

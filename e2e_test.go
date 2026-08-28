@@ -9,13 +9,15 @@ package larkspur
 // they're gated behind the "e2e" build tag and excluded from `go test
 // ./...`. Run them explicitly:
 //
-//	go test -tags e2e -timeout 60m -run TestEndToEnd -v .
+//	go test -tags e2e -timeout 130m -run TestEndToEnd -v .
 //
 // ollama must be running locally with the model configured in agents.go
-// (gemma4:e2b) pulled. If it isn't reachable, the suite skips instead of
-// failing. Assertions check observable filesystem state (what the agent's
-// tools actually produced), not the model's prose, since that varies run to
-// run. Even so, a small local model can occasionally fail a task outright,
+// (generalist, built from modelfiles/generalist.Modelfile — see the
+// README's Ollama setup section) available. If it isn't reachable, the
+// suite skips instead of failing. Assertions check observable
+// filesystem state (what the agent's tools actually produced), not the
+// model's prose, since that varies run to run. Even so, a small local
+// model can occasionally fail a task outright,
 // or simply take an unreasonably long time to respond to one particular
 // completion call — that's the exact unreliability the checkpoint system
 // exists to mitigate, not a guarantee these tests eliminate. A failure here
@@ -39,11 +41,13 @@ package larkspur
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -107,6 +111,11 @@ func TestEndToEnd(t *testing.T) {
 	t.Run("Easy", func(t *testing.T) { testEndToEndEasy(t, provider) })
 	t.Run("Medium", func(t *testing.T) { testEndToEndMedium(t, provider) })
 	t.Run("Hard", func(t *testing.T) { testEndToEndHard(t, provider) })
+	t.Run("Memory", func(t *testing.T) { testEndToEndMemory(t, provider) })
+	t.Run("SystemCommand", func(t *testing.T) { testEndToEndSystemCommand(t, provider) })
+	t.Run("Search", func(t *testing.T) { testEndToEndSearch(t, provider) })
+	t.Run("Edit", func(t *testing.T) { testEndToEndEdit(t, provider) })
+	t.Run("CheckpointRecovery", func(t *testing.T) { testEndToEndCheckpointRecovery(t, provider) })
 }
 
 // newTestProvider returns a live provider for the suite, configured the same
@@ -294,5 +303,268 @@ func testEndToEndHard(t *testing.T, provider anyllm.Provider) {
 
 	if got := strings.TrimSpace(string(data)); got != "3" {
 		t.Fatalf("Expected `3`, received `%s`", got)
+	}
+}
+
+// testEndToEndMemory proves memories persist across independent plans
+// sharing the same store: one plan writes a value via memory_put, and a
+// second, unrelated plan later recalls it via memory_get and acts on
+// it — the cross-session continuity the memory_* tools and
+// SummarizePlanResults exist to provide, exercised here end-to-end for
+// the first time. Verification of the first half reads the store
+// directly (ground truth), rather than trusting the model's own account
+// of what it stored.
+func testEndToEndMemory(t *testing.T, provider anyllm.Provider) {
+	t.Helper()
+
+	const key = "e2e_test_codename"
+	const value = "NERINE-7"
+
+	putPrompt := fmt.Sprintf(
+		`Store the value "%s" in memory under the key "%s" so it can be recalled later.`,
+		value, key,
+	)
+
+	summary := runPlan(t, provider, putPrompt)
+	t.Logf("summary: %s", summary)
+
+	stored, err := memoryStore.Get(key)
+	if err != nil {
+		t.Fatalf("could not Get %s from memory store: %v", key, err)
+	}
+
+	if stored != value {
+		t.Fatalf("Expected memory %s to be %q, received %q", key, value, stored)
+	}
+
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "codename.txt")
+
+	getPrompt := fmt.Sprintf(
+		`Recall the memory stored under the key "%s" and write its value to the file %s.`,
+		key, outPath,
+	)
+
+	summary = runPlan(t, provider, getPrompt)
+	t.Logf("summary: %s", summary)
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("could not ReadFile %s: %v", outPath, err)
+	}
+
+	if got := strings.TrimSpace(string(data)); got != value {
+		t.Fatalf("Expected `%s`, received `%s`", value, got)
+	}
+}
+
+// testEndToEndSystemCommand requires chaining two distinct tools with a
+// real dependency between them: write a Go file, then run an
+// allow-listed command (gofmt -l) against it via system_command and
+// report what that command actually found. Verification runs gofmt -l
+// itself to get ground truth rather than trusting either the model's
+// code or its own report of whether it was clean.
+func testEndToEndSystemCommand(t *testing.T, provider anyllm.Provider) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "double.go")
+	resultPath := filepath.Join(dir, "fmt_result.txt")
+
+	prompt := fmt.Sprintf(
+		"Write a Go source file at %s in package main that defines a function named Double "+
+			"which takes one int parameter and returns double its value. Then check whether "+
+			"that file is gofmt-clean by running \"gofmt -l %s\", and write the word CLEAN "+
+			"to %s if that produces no output, or DIRTY to %s if it produces any output.",
+		path, path, resultPath, resultPath,
+	)
+
+	summary := runPlan(t, provider, prompt)
+	t.Logf("summary: %s", summary)
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("generated file %s is not valid Go: %v", path, err)
+	}
+
+	var double *ast.FuncDecl
+
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "Double" {
+			double = fn
+			break
+		}
+	}
+
+	if double == nil {
+		t.Fatalf("Expected %s to define a function named Double", path)
+	}
+
+	out, err := exec.Command("gofmt", "-l", path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("could not run gofmt -l %s: %v", path, err)
+	}
+
+	want := "CLEAN"
+	if strings.TrimSpace(string(out)) != "" {
+		want = "DIRTY"
+	}
+
+	data, err := os.ReadFile(resultPath)
+	if err != nil {
+		t.Fatalf("could not ReadFile %s: %v", resultPath, err)
+	}
+
+	if got := strings.TrimSpace(string(data)); got != want {
+		t.Fatalf("Expected %q (per gofmt -l), received %q", want, got)
+	}
+}
+
+// testEndToEndSearch requires finding a needle across several decoy
+// files rather than reading a file it was already handed the exact path
+// to. The prompt deliberately points at a nonexistent file first, so the
+// agent must recover from a failed read and use dir_list/file_find_glob/
+// grep_files to actually locate the answer instead of stalling or
+// fabricating one.
+func testEndToEndSearch(t *testing.T, provider anyllm.Provider) {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"alpha.log":   "INFO: startup complete\nINFO: listening on :8080\n",
+		"bravo.log":   "INFO: connected to db\nAUTH-TOKEN: XJ4Q9Z\nINFO: ready\n",
+		"charlie.log": "WARN: retrying connection\nINFO: connected\n",
+	}
+
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("could not WriteFile %s: %v", name, err)
+		}
+	}
+
+	outPath := filepath.Join(dir, "answer.txt")
+
+	prompt := fmt.Sprintf(
+		`Start by trying to read the file %s — it does not exist, so that read will fail. `+
+			`When it does, search the directory %s for the .log file that contains a line `+
+			`starting with "AUTH-TOKEN:". Write just that file's name (e.g. "alpha.log", not `+
+			"the full path) to %s.",
+		filepath.Join(dir, "config.log"), dir, outPath,
+	)
+
+	summary := runPlan(t, provider, prompt)
+	t.Logf("summary: %s", summary)
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("could not ReadFile %s: %v", outPath, err)
+	}
+
+	if got := strings.TrimSpace(string(data)); got != "bravo.log" {
+		t.Fatalf("Expected `bravo.log`, received `%s`", got)
+	}
+}
+
+// testEndToEndEdit requires modifying one line of an existing file via
+// file_edit rather than rewriting the whole thing. Checking that the
+// untouched line survives is what actually distinguishes an in-place
+// edit from a full file_write_full rewrite that happened to reproduce
+// the same content.
+func testEndToEndEdit(t *testing.T, provider anyllm.Provider) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.txt")
+
+	if err := os.WriteFile(path, []byte("debug=false\ntimeout=30\n"), 0644); err != nil {
+		t.Fatalf("could not WriteFile %s: %v", path, err)
+	}
+
+	prompt := fmt.Sprintf(
+		`The file %s contains a line "debug=false". Change just that line to "debug=true", `+
+			`leaving the rest of the file untouched.`,
+		path,
+	)
+
+	summary := runPlan(t, provider, prompt)
+	t.Logf("summary: %s", summary)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("could not ReadFile %s: %v", path, err)
+	}
+
+	got := string(data)
+
+	if !strings.Contains(got, "debug=true") {
+		t.Fatalf("Expected %s to contain `debug=true`, received `%s`", path, got)
+	}
+
+	if strings.Contains(got, "debug=false") {
+		t.Fatalf("Expected %s to no longer contain `debug=false`, received `%s`", path, got)
+	}
+
+	if !strings.Contains(got, "timeout=30") {
+		t.Fatalf(
+			"Expected %s to still contain `timeout=30` (an in-place edit, not a full rewrite), received `%s`",
+			path, got,
+		)
+	}
+}
+
+// testEndToEndCheckpointRecovery proves the checkpoint mechanism itself
+// (memory.go's getCheckpoint/putCheckpoint, wired into chat.go) actually
+// carries information across two independent chat() calls sharing a
+// planID — the same continuity a plan relies on across its checklist
+// items or across a history compaction. It drives chat() directly rather
+// than the full plan pipeline, since what's under test is continuity
+// between two separate calls, not plan creation or checklist
+// verification.
+func testEndToEndCheckpointRecovery(t *testing.T, provider anyllm.Provider) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), perTestTimeout)
+	defer cancel()
+
+	planID := rand.Text()
+	t.Cleanup(func() { clearCheckpoint(planID) })
+
+	const breadcrumb = "resume: write PINEAPPLE to the output file"
+
+	setupPrompt := fmt.Sprintf(
+		"Call the task_checkpoint tool with next_step set to exactly this text, "+
+			"and do nothing else: %s",
+		breadcrumb,
+	)
+
+	chat(ctx, provider, generalistAgentName, setupPrompt, "", planID, true)
+
+	checkpoint := getCheckpoint(planID)
+	if !strings.Contains(checkpoint, "PINEAPPLE") {
+		t.Fatalf("Expected checkpoint for %s to contain `PINEAPPLE`, received `%s`", planID, checkpoint)
+	}
+
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "output.txt")
+
+	resumePrompt := fmt.Sprintf(
+		"Your checkpoint reminder tells you what to do next. Follow it literally, using %s "+
+			"as the output file it refers to.",
+		outPath,
+	)
+
+	chat(ctx, provider, generalistAgentName, resumePrompt, "", planID, true)
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("could not ReadFile %s: %v", outPath, err)
+	}
+
+	if got := strings.TrimSpace(string(data)); got != "PINEAPPLE" {
+		t.Fatalf("Expected `PINEAPPLE`, received `%s`", got)
 	}
 }
